@@ -1,0 +1,21 @@
+
+#include<stdio.h>
+
+#include <json-glib/json-glib.h>
+
+
+
+
+
+int main() {
+
+
+JsonParser *parser =  json_parser_new ();
+
+
+gboolean b;
+
+b = json_parser_load_from_data(parser, "{a: 99}", -1, NULL);
+printf("b=%d\n", b);
+
+}
