@@ -53,8 +53,11 @@ void clearPendingCalls(struct lws * wsi) {
     debug("pending calls now %d\n", g_hash_table_size(pendingcalls));
   G_UNLOCK (pendingcalls);
 }
-   
-      
+
+
+/*
+ * Just used for testing 
+ */   
 static void testReplies() {
    G_LOCK (pendingcalls);
    guint length;
@@ -97,20 +100,17 @@ static void testReplies() {
 }
 
    
-GAsyncQueue * testqueue ;
-
+ 
 void * sender_thread_main(void * arg) {
 
    init_data_store();
-   testqueue = g_async_queue_new ();
-   
+    
    while(1) {
 
       debug("sender thread sleep\n");
       sleep(10);
       debug("sender thread wake\n");
       testReplies();
-      //queue_message();
       //      lws_cancel_service(context) ;
    }
 

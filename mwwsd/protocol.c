@@ -53,6 +53,11 @@ static int _send_response(struct lws *wsi, const char * text) {
    free(buf);
 }
 
+/**
+ * add to an internal send queue per wsi the message 
+ * described by jobj. 
+ * this function serialized jobj before queueing, jobj may be destroyed
+ */
 int queueMessage(struct lws *wsi,  json_object * jobj ) {
    G_LOCK (sendqueues);
    if (sendqueues == NULL)
@@ -72,7 +77,11 @@ int queueMessage(struct lws *wsi,  json_object * jobj ) {
    G_UNLOCK (sendqueues);
    return 1;
 }
-   
+
+/**
+ * called when we get a writeable event on a wsi 
+ * dequeue a message from te sendqueue and send it on the wsi
+ */
 static int doWritable(struct lws *wsi) {
    G_LOCK (sendqueues);
    GQueue * q = g_hash_table_lookup (sendqueues, wsi);
@@ -95,6 +104,9 @@ static int doWritable(struct lws *wsi) {
    return rc;
 }
 
+/**
+ * set error  indicator on a message described by jobj
+ */
 static int setError(struct json_object *jobj, const char * reason) {
    json_object_object_add (jobj, "RC", json_object_new_string ("FAIL"));
    json_object_object_add (jobj, "reason", json_object_new_string (reason));
@@ -112,7 +124,9 @@ static int doError(struct lws *wsi, struct json_object *jobj, const char * reaso
    queueMessage(wsi, jobj);   
 };
 
-
+/**
+ * on an Attach message from client
+ */
 static int doAttach(struct lws *wsi, struct json_object *jobj ) {
 
    struct json_object *field;
@@ -132,9 +146,12 @@ static int doAttach(struct lws *wsi, struct json_object *jobj ) {
    
    json_object_object_add (jobj, "RC", json_object_new_string ("OK"));
    queueMessage(wsi, jobj);
-
+   return 0;
 };
 
+/**
+ * called when a client closes the connection, or is otherwise broken
+ */
 static int doClose(struct lws *wsi) {
 
    // remove all pending messages waiting to be sent
@@ -154,12 +171,18 @@ static int doClose(struct lws *wsi) {
    return 0;
 }
 
+/**
+ * used to get a handle for IPC MidWay calls
+ */ 
 int  getNextHandle() {
    static int hdl = 0xbefa;
    if (hdl > 0x6fffffff) hdl = 0xbefa;
    return hdl++;
 }
 
+/**
+ * called on either Subscribe or UnSubscribe messages from client
+ */
 static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscribe ) {
 
    struct json_object *field;
@@ -209,7 +232,9 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
    return 0;
 };
 
-
+/**
+ * called on a call request from client 
+ **/
 static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
 
    struct json_object *field;
@@ -333,32 +358,9 @@ static inline void inspect_headers_debug(struct lws *wsi) {
    print_header(wsi, WSI_TOKEN_HTTP_URI_ARGS);
 };
 
-
-
-int queue_message() {
-   sendev = 1;
-}
-
-int drain_queue() {
-
-   if (!sendev) return 0;
-   struct json_object * jobj = json_object_new_object();
-   
-   json_object_object_add (jobj, "command", json_object_new_string ("EVENT"));
-   json_object_object_add (jobj, "name", json_object_new_string ("testev"));
-   json_object_object_add (jobj, "data", json_object_new_string ("testdata"));
-   json_object_object_add (jobj, "handle", json_object_new_int (sub_handle));
-
-   const char * json_text = json_object_to_json_string(jobj);
-	 
-   if (wsi_sub != NULL) {
-      _send_response(wsi_sub,json_text);
-   }
-   sendev = 0;
-}
-
-
-
+/**
+ * the heavy lifter, called on every event on the WebSocket
+ */
 int callback_midway_ws(
 		       struct lws *wsi,
 		       enum lws_callback_reasons reason,

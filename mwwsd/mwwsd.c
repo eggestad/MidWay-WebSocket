@@ -97,7 +97,6 @@ int main(void) {
     // requests to process)
     lws_service(context, 50);
 
-    drain_queue();
   }
    
   lws_context_destroy(context);
