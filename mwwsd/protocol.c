@@ -165,7 +165,8 @@ static int doClose(struct lws *wsi) {
    G_UNLOCK (sendqueues);
 
    // TODO: clear all subscriptions
-
+   clearSubscriptions(wsi);
+   
    // TODO: clear all pending calls
    clearPendingCalls(wsi);
    return 0;
@@ -189,7 +190,17 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
    int rc;
    const char * pattern = NULL;
    const char * type = "glob";
+   int subtype = SUBTYPE_GLOB;
+   int handle = 0;
+   
+   char * replycmd = "SUBSCRIBERPL";
+   if (unsubscribe) {
+      replycmd  = "UNSUBSCRIBERPL";
+   }
 
+   json_object_object_del(jobj, "command");
+   json_object_object_add (jobj, "command", json_object_new_string (replycmd));
+   
    if (json_object_object_get_ex(jobj, "pattern", &field)) {
       
       if (! json_object_is_type(field, json_type_string)) {
@@ -197,7 +208,7 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
 	 queueMessage(wsi, jobj);	 
 	 return -1;
       }
-      const char * pattern = json_object_get_string (field);
+      pattern = json_object_get_string (field);
       debug("subscribing to pattern %s\n",  pattern);
    } else {
       setError(jobj, "pattern is missing");
@@ -205,6 +216,23 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
       return -1;
    }
    
+   if (json_object_object_get_ex(jobj, "handle", &field)) {
+      
+      if ( json_object_is_type(field, json_type_int)) {
+	 handle  = json_object_get_int (field);
+	 debug("int handle = %d\n", handle);
+      } else if ( json_object_is_type(field, json_type_string)) {
+	 const char * s  = json_object_get_string (field);
+	 debug("str handle = %s\n", s);
+	 handle = atoi(s);
+	 debug("int handle = %d\n", handle);
+      } else {
+	 setError(jobj, "handle is not a string or long");
+	 queueMessage(wsi, jobj);	 
+	 return -1;
+      }      
+   }
+
    if (json_object_object_get_ex(jobj, "type", &field)) {
       
       if (! json_object_is_type(field, json_type_string)) {
@@ -212,22 +240,16 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
 	 return -1;
       }
       type = json_object_get_string (field);
+      if (strcmp(type, "regex") )
+	 subtype = SUBTYPE_REGEX;
    };
-
-   char * replycmd = "SUBSCRIBERPL";
-   if (unsubscribe) {
-      replycmd  = "SUBSCRIBERPL";
-   } else {
-      
+   rc = addSubScription(wsi, handle, pattern,  subtype);
+   if (rc == 0) 
+      json_object_object_add (jobj, "RC", json_object_new_string ("OK"));
+   else {
+      setError(jobj, getSubscriptionError());
    }
-   
-   json_object_object_add (jobj, "RC", json_object_new_string ("OK"));
-   json_object_object_del(jobj, "command");
-   json_object_object_add (jobj, "command", json_object_new_string (replycmd));
-   
 
-   wsi_sub = wsi;
-   
    queueMessage(wsi, jobj);
    return 0;
 };
@@ -298,7 +320,7 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
    return 0;
 };
 
-struct json_object * makeCallReply(json_object * jobj, int32_t clienthandle, char * data, size_t datalen, int rc, int apprc) {
+struct json_object * xxmakeCallReply(json_object * jobj, int32_t clienthandle, char * data, size_t datalen, int rc, int apprc) {
    if (jobj == NULL)
       jobj = json_object_new_object ();
 
@@ -370,7 +392,8 @@ int callback_midway_ws(
 		       ) {
 
    enum json_tokener_error jerr;
-   debug("midway connection event %d (%s) len of in=%d user = %p\n",
+   debug(">>>> midway connection event fd=%d EV:%d(%s) len of in=%d user = %p\n",
+	 lws_get_socket_fd(wsi),
 	 reason, lbl_lws_callback_reasons(reason),  len, user);
 
    switch (reason) {
@@ -462,12 +485,9 @@ int callback_midway_ws(
       
    case LWS_CALLBACK_CLOSED:
       {
-	 char cname[256];
-	 char rip[32];
-	 lws_get_peer_addresses	(wsi, lws_get_socket_fd (wsi),
-				 cname, 255, rip, 31);
+	 
 	 //info("Got connection from %s(%s) for domain %s clientname %s user %s cred %s\n", cname, rip, domain, rc_clientname, rc_username, rc_credentials);
-	 info("Closing connection from %s(%s) \n", cname, rip);
+	 info("Closing connection of fd %d \n", lws_get_socket_fd(wsi));
 	 doClose(wsi);
       }
       break;
@@ -476,6 +496,6 @@ int callback_midway_ws(
       info("got unepected event\n");
       break;
    }
-   
+   debug("==== midway connection event done\n");
    return 0;
 }

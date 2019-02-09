@@ -74,17 +74,22 @@ a call reply from server (mwwsd) to client
 ** SUBSCRIBE / UNSUBSCRIBE
 Request from client:
 {
-  "command": "SUBSCRIBEREQ"|"UNSUBSCRIBEREQ" // REQUIRED 
-  "pattern": str		       	     // REQUIRED
-  "type": "glob"|"regex"      	       	     // OPTIONAL default glob
+  "command": "SUBSCRIBEREQ"   // REQUIRED 
+  "pattern": str	      // REQUIRED
+  "handle": int|str	      // REQUIRED
+  "type": "glob"|"regex"      // OPTIONAL default glob
 }
-An UNSUBCRIBE pattern and type must match a SUBSCRIBE exactly
+An UNSUBCRIBE handle must match a SUBSCRIBE exactly
+{
+  "command": "UNSUBSCRIBEREQ" // REQUIRED 
+  "handle": int|str	      // REQUIRED
+}
 
 Server will reply with
 {
-  "command": "SUBSCRIBERPL"|"UNSUBSCRIBERPL" // REQUIRED 
+  "command": "SUBSCRIBERPL"|"UNSUBSCRIBERPL" // REQUIRED
+  "handle": int|str	      		     // REQUIRED    
   "RC": "OK"|"FAIL"		       	     // REQUIRED
-  "reason": "glob"|"regex"      	     // OPTIONAL default glob
 }
 
 
@@ -92,5 +97,7 @@ Server will reply with
 Sent from Server only for event matching a SUBSCRIBE, shall not be replied to
 {
   "command": "EVENT"	// REQUIRED
-  "data": str		// OPIONAL
+  "event":  str		// REQUIRED	
+  "handle": [ int|str ] // REQUIRED	a list of the sub handle that matches
+  "data": str		// OPTIONAL
 }

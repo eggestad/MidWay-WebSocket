@@ -6,6 +6,9 @@ var mw = require('./midway-node-clientlib');
 
 mw.attach("url")
 
+function ev1(evname, evdata) {
+    console.info("EV:", evname, evedata);
+}
 
 function function2() {
     mw.acall("testdate", "data", function(rply) {
@@ -14,12 +17,16 @@ function function2() {
 	console.debug("call replied error", err);
     });;
 }
+function function3() {
+    let rc = mw.subscribe("1*", ev1, ev1);
+}
+
 
 function function9() {
     mw.detach();
 }
 
-//setTimeout(function2, 2000);
+setTimeout(function3, 500);
 
 
 //setTimeout(function9, 3000);

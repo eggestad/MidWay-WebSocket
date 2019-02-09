@@ -82,7 +82,9 @@ int main(void) {
   }
   lws_set_log_level(0xffff,  NULL /* lwsl_emit_stderr */);
   
- 
+  init_subscription_store();
+  init_pendingcall_store();
+     
   lwsl_notice("starting server...\n");
   pthread_t sender_thread;
 

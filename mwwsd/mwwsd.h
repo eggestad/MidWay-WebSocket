@@ -19,6 +19,10 @@ typedef struct {
    
 } PendingCall ;
 
+#define SUBTYPE_GLOB 10
+#define SUBTYPE_REGEX 11
+
+
 
 #define debug(...) do { lwsl_debug( __VA_ARGS__  ); } while(0);
 
@@ -41,14 +45,23 @@ int callback_midway_ws(
 		       );
 
 
-int queue_message(void);
-
-int drain_queue(void);
-
+// sender.c
 void * sender_thread_main(void *);
 
+// protocol.c
 char * lbl_lws_callback_reasons(int);
+int queueMessage(struct lws *wsi,  json_object * jobj ) ;
 
+// pendingcalls.c
+void init_pendingcall_store();
 int addPendingCall(PendingCall *) ;
 void clearPendingCalls(struct lws * wsi) ;
-int queueMessage(struct lws *wsi,  json_object * jobj ) ;
+
+// subscriptions.c
+
+int addSubScription(struct lws *, int32_t, const char *, int) ;
+int delSubScription(struct lws *, int32_t) ;
+void clearSubscriptions(struct lws *) ;
+void processEvent(char *, char *, size_t) ;
+const char * getSubscriptionError() ;
+void init_subscription_store(void) ;
