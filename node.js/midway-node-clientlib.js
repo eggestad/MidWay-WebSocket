@@ -29,6 +29,7 @@ client.on("connect", function(conn) {
     });
     conn.on("close", function(reasonCode, desc) {
 	console.info("on close", reasonCode, desc);
+	process.stdin.destroy();
 	websocket = undefined;
     });
     
@@ -40,6 +41,11 @@ client.on("connect", function(conn) {
     console.info(" send", m, " rc", rc);
 });
 
+var handle = 0x1234;
+function getHandle() {
+    if (handle > 0x0fffffff) handle = 0x1234;
+    return handle++;
+}
 
 exports.attach = function (url) {
     client.connect('ws://localhost:9000/', 'midway-1', null, null, null);
@@ -57,7 +63,8 @@ exports.acall = function (srcname, data, successfunc, errorfunc, flags = 0) {
     calldata.command = "CALLREQ";
     calldata.service = srcname;
     calldata.data = data;
-    calldata.flags = flags;
+    calldata.handle = getHandle();
+//    calldata.flags = flags;
     websocket.send(JSON.stringify(calldata));
 };
 

@@ -32,9 +32,10 @@ int queueMessage(struct lws *wsi,  json_object * jobj ) {
    }
    const char * text = json_object_to_json_string(jobj);
    char * msg = strdup(text);
-   g_queue_push_tail(q, msg);
+   g_queue_push_head(q, msg);
    lws_callback_on_writable (wsi);
-   debug("enqueued on wsi %p fd %d msg %s\n", wsi, lws_get_socket_fd(wsi), msg);
+   debug("enqueued on wsi %p fd %d pending %d msg %s\n",
+	 wsi, lws_get_socket_fd(wsi), g_queue_get_length(q), msg);
 }
    
 static int _send_response(struct lws *wsi, const char * text) {
@@ -87,7 +88,7 @@ static int doWritable(struct lws *wsi) {
    int rc = _send_response(wsi, msg);
    free(msg);
    guint restlen = g_queue_get_length (q);
-   if (restlen  < 0) 
+   if (restlen  > 0) 
       lws_callback_on_writable (wsi);
    return rc;
 }
@@ -126,6 +127,28 @@ static int doAttach(struct lws *wsi, struct json_object *jobj ) {
    queueMessage(wsi, jobj);
 
 };
+
+static int doClose(struct lws *wsi) {
+
+   // remove all pending messages waiting to be sent
+   GQueue * q = g_hash_table_lookup (sendqueues, wsi);
+   if (q != NULL) {
+      debug("removed send queue\n");
+      g_queue_free_full (q, free);
+      g_hash_table_remove (sendqueues, wsi);
+   }
+
+   // TODO: clear all subscriptions
+
+   // TODO: clear all pending calls
+   return 0;
+}
+
+int  getNextHandle() {
+   static int hdl = 0xbefa;
+   if (hdl > 0x6fffffff) hdl = 0xbefa;
+   return hdl++;
+}
 
 static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscribe ) {
 
@@ -177,7 +200,7 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
 };
 
 
-   static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
+static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
 
    struct json_object *field;
    int rc;
@@ -189,21 +212,24 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
    if (json_object_object_get_ex(jobj, "service", &field)) {
       
       if (! json_object_is_type(field, json_type_string)) {
-	 doError(wsi, jobj, "service is not a string");
+	 setError(jobj, "service is not a string");
+	 queueMessage(wsi, jobj);	 
 	 return -1;
       }
       service = json_object_get_string (field);
       debug("about to call service  %s\n",  service);
       
    } else {
-      doError(wsi, jobj, "servicename missing");
+      setError(jobj, "servicename missing");
+      queueMessage(wsi, jobj);	 
       return -1;
    }
 
    if (json_object_object_get_ex(jobj, "data", &field)) {
       
       if (! json_object_is_type(field, json_type_string)) {
-	 doError(wsi, jobj, "data is not a string");
+	 setError(jobj, "data is not a string");
+	 queueMessage(wsi, jobj);	 
 	 return -1;
       }
       data = json_object_get_string (field);
@@ -217,27 +243,24 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
 	 const char * s  = json_object_get_string (field);
 	 handle = atoi(s);
       } else {
-	 doError(wsi, jobj, "handle is not a string or long");
+	 setError(jobj, "handle is not a string or long");
+	 queueMessage(wsi, jobj);	 
 	 return -1;
       }      
    }
    if (data == NULL) data = "";
+   debug("call request valid\n");
    
-   char buf[strlen(data) + 100]; 
-   sprintf(buf, "reply to data: %s from %s ", data, service);
-
-   json_object_object_del(jobj, "command");
-   json_object_object_del(jobj, "data");
-
-   json_object_object_add (jobj, "command", json_object_new_string ("CALLRPL"));
-   json_object_object_add (jobj, "data", json_object_new_string (buf));
-
-   json_object_object_add (jobj, "RC", json_object_new_string ("OK"));
-   json_object_object_add (jobj, "apprc", json_object_new_int (42));
-   
-   const char * json_text = json_object_to_json_string(jobj);
-   _send_response(wsi, json_text);
-
+   PendingCall * pc = malloc(sizeof(PendingCall));
+   pc->wsi = wsi;
+   pc->clienthandle = handle;
+   pc->internalhandle = getNextHandle();
+   pc->jobj = jobj;
+   debug("jobj %p\n", jobj);
+   debug("pending call %p\n", pc);
+   json_object_get(jobj);
+   addPendingCall(pc);
+   return 0;
 };
 
 struct json_object * makeCallReply(json_object * jobj, int32_t clienthandle, char * data, size_t datalen, int rc, int apprc) {
@@ -364,6 +387,13 @@ int callback_midway_ws(
 	 debug(" client %s %s\n", rc_clientname ,clientname );
 	 debug(" user   %s %s\n", rc_username ,username );
 	 debug(" creden %s %s\n", rc_credentials ,credentials );
+
+	 char cname[256];
+	 char rip[32];
+	 lws_get_peer_addresses	(wsi, lws_get_socket_fd (wsi),
+				 cname, 255, rip, 31);
+	 info("Got connection from %s(%s) for domain %s clientname %s user %s cred %s\n", cname, rip, domain, rc_clientname, rc_username, rc_credentials);
+	 
       }
       break;
       
@@ -416,6 +446,18 @@ int callback_midway_ws(
    case LWS_CALLBACK_SERVER_WRITEABLE:
       info("got writeable event\n");
       doWritable(wsi);
+      break;
+      
+   case LWS_CALLBACK_CLOSED:
+      {
+	 char cname[256];
+	 char rip[32];
+	 lws_get_peer_addresses	(wsi, lws_get_socket_fd (wsi),
+				 cname, 255, rip, 31);
+	 //info("Got connection from %s(%s) for domain %s clientname %s user %s cred %s\n", cname, rip, domain, rc_clientname, rc_username, rc_credentials);
+	 info("Closing connection from %s(%s) \n", cname, rip);
+	 doClose(wsi);
+      }
       break;
       
    default:

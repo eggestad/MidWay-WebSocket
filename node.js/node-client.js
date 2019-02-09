@@ -41,6 +41,6 @@ process.stdin.on('readable', () => {
 });
 
 process.stdin.on('end', () => {
-    mw.detach();
+   mw.detach();
     
 });
