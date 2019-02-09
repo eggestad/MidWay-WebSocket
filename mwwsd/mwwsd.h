@@ -50,4 +50,5 @@ void * sender_thread_main(void *);
 char * lbl_lws_callback_reasons(int);
 
 int addPendingCall(PendingCall *) ;
+void clearPendingCalls(struct lws * wsi) ;
 int queueMessage(struct lws *wsi,  json_object * jobj ) ;

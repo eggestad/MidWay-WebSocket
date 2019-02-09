@@ -18,26 +18,11 @@
 struct lws *wsi_sub = NULL;
 int sub_handle = 0;
 int sendev = 0;
+G_LOCK_DEFINE (sendqueues );
 
 GHashTable * sendqueues = NULL;
 
-int queueMessage(struct lws *wsi,  json_object * jobj ) {
-   if (sendqueues == NULL)
-      sendqueues = g_hash_table_new (g_direct_hash, g_direct_equal);
-   
-   GQueue * q = g_hash_table_lookup (sendqueues, wsi);
-   if (q == NULL) {
-      q = g_queue_new ();
-      g_hash_table_insert (sendqueues, wsi, q);
-   }
-   const char * text = json_object_to_json_string(jobj);
-   char * msg = strdup(text);
-   g_queue_push_head(q, msg);
-   lws_callback_on_writable (wsi);
-   debug("enqueued on wsi %p fd %d pending %d msg %s\n",
-	 wsi, lws_get_socket_fd(wsi), g_queue_get_length(q), msg);
-}
-   
+
 static int _send_response(struct lws *wsi, const char * text) {
 
 
@@ -68,12 +53,28 @@ static int _send_response(struct lws *wsi, const char * text) {
    free(buf);
 }
 
-static int setError(struct json_object *jobj, const char * reason) {
-   json_object_object_add (jobj, "RC", json_object_new_string ("FAIL"));
-   json_object_object_add (jobj, "reason", json_object_new_string (reason));
-};
-
+int queueMessage(struct lws *wsi,  json_object * jobj ) {
+   G_LOCK (sendqueues);
+   if (sendqueues == NULL)
+      sendqueues = g_hash_table_new (g_direct_hash, g_direct_equal);
+   
+   GQueue * q = g_hash_table_lookup (sendqueues, wsi);
+   if (q == NULL) {
+      q = g_queue_new ();
+      g_hash_table_insert (sendqueues, wsi, q);
+   }
+   const char * text = json_object_to_json_string(jobj);
+   char * msg = strdup(text);
+   g_queue_push_head(q, msg);
+   lws_callback_on_writable (wsi);
+   debug("enqueued on wsi %p fd %d pending %d msg %s\n",
+	 wsi, lws_get_socket_fd(wsi), g_queue_get_length(q), msg);
+   G_UNLOCK (sendqueues);
+   return 1;
+}
+   
 static int doWritable(struct lws *wsi) {
+   G_LOCK (sendqueues);
    GQueue * q = g_hash_table_lookup (sendqueues, wsi);
    if (q == NULL) {
       warn("Got spurious WRITEABLE");
@@ -90,8 +91,14 @@ static int doWritable(struct lws *wsi) {
    guint restlen = g_queue_get_length (q);
    if (restlen  > 0) 
       lws_callback_on_writable (wsi);
+   G_UNLOCK (sendqueues);
    return rc;
 }
+
+static int setError(struct json_object *jobj, const char * reason) {
+   json_object_object_add (jobj, "RC", json_object_new_string ("FAIL"));
+   json_object_object_add (jobj, "reason", json_object_new_string (reason));
+};
 
 static int doError(struct lws *wsi, struct json_object *jobj, const char * reason) {
    struct json_object *ret_jobj ;
@@ -131,16 +138,19 @@ static int doAttach(struct lws *wsi, struct json_object *jobj ) {
 static int doClose(struct lws *wsi) {
 
    // remove all pending messages waiting to be sent
+   G_LOCK (sendqueues);
    GQueue * q = g_hash_table_lookup (sendqueues, wsi);
    if (q != NULL) {
       debug("removed send queue\n");
       g_queue_free_full (q, free);
       g_hash_table_remove (sendqueues, wsi);
    }
+   G_UNLOCK (sendqueues);
 
    // TODO: clear all subscriptions
 
    // TODO: clear all pending calls
+   clearPendingCalls(wsi);
    return 0;
 }
 

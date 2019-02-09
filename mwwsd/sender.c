@@ -9,7 +9,10 @@
 #include <MidWay.h>
 
 #include "mwwsd.h"
-GHashTable * pendingcalls = NULL;
+
+G_LOCK_DEFINE (pendingcalls);
+
+static GHashTable * pendingcalls = NULL;
 
 void init_data_store() {
       
@@ -17,15 +20,43 @@ void init_data_store() {
 
 }
 
+
 int addPendingCall(PendingCall * pc) {
+   G_LOCK (pendingcalls);
    long hdl = pc->internalhandle;
    debug("pending call with handle %ld\n", hdl);
    gpointer inthandle = (gpointer) hdl;
    gboolean rc = g_hash_table_insert(pendingcalls, inthandle, pc);
    debug("pending calls now %d\n", g_hash_table_size(pendingcalls));
+   G_UNLOCK (pendingcalls);
    return rc ;
 }
+
+void clearPendingCalls(struct lws * wsi) {
+   G_LOCK (pendingcalls);
+   guint length;
+   debug("pending calls before clearing %d\n", g_hash_table_size(pendingcalls));
+
+   gpointer * keys = 
+      g_hash_table_get_keys_as_array (pendingcalls, &length);
+   for (int i = 0; i < length; i++) {
+      gpointer key = keys[i];
+      gpointer val = 
+	 g_hash_table_lookup (pendingcalls,  key);
+      PendingCall * pc = val;
+      if (pc->wsi == wsi) {
+	 debug("clearing a pending cal\n");
+	 free(pc);
+	 g_hash_table_remove (pendingcalls,  key);
+      }
+   }
+    debug("pending calls now %d\n", g_hash_table_size(pendingcalls));
+  G_UNLOCK (pendingcalls);
+}
+   
+      
 static void testReplies() {
+   G_LOCK (pendingcalls);
    guint length;
    debug("pending calls before  %d\n", g_hash_table_size(pendingcalls));
 
@@ -61,6 +92,7 @@ static void testReplies() {
       debug("done one call\n");
    };
    debug("pending calls after replies %d\n", g_hash_table_size(pendingcalls));
+   G_UNLOCK (pendingcalls);
    return ;
 }
 
