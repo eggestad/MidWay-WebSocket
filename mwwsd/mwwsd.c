@@ -9,6 +9,10 @@
 
 #include "mwwsd.h"
 
+
+/**
+ * HTTP handler is required by the libwebsocket 
+ */
 static int callback_http(
     struct lws *wsi,
     enum lws_callback_reasons reason,
@@ -24,7 +28,8 @@ static int callback_http(
   if ( reason == LWS_CALLBACK_GET_THREAD_ID) return 0;
 
    lws_sockfd_type sockfd = lws_get_socket_fd( wsi );
-   debug("https connection fd %d reason %d", sockfd, reason);
+   debug("https connection fd %d reason %d(%s)\n", sockfd,
+	 reason, lbl_lws_callback_reasons(reason) );
    
    return 0;
 }
@@ -39,7 +44,7 @@ static struct lws_protocols protocols[] = {
   {
     "midway-1", // protocol name - very important!
     callback_midway_ws,   // callback
-    0                          // we don't use any per session data
+    0                     // we don't use any per session data
   },
   {
     NULL, NULL, 0   /* End of list */
@@ -49,20 +54,6 @@ static struct lws_protocols protocols[] = {
 
 struct lws_context *context;
 
-void * sender_thread_main(void * arg) {
-
-
-   while(1) {
-
-      debug("sender thread sleep");
-      sleep(10);
-      debug("sender thread wake");
-      queue_message();
-      lws_cancel_service(context) ;
-   }
-
-   return NULL;
-}
 
 int main(void) {
   // server url will be http://localhost:9000
@@ -89,20 +80,22 @@ int main(void) {
     fprintf(stderr, "libwebsocket init failed\n");
     return -1;
   }
-   
-  printf("starting server...\n");
+  lws_set_log_level(0xffff,  NULL /* lwsl_emit_stderr */);
+  
+ 
+  lwsl_notice("starting server...\n");
   pthread_t sender_thread;
 
   pthread_create(&sender_thread, NULL, sender_thread_main, NULL);
      
   // infinite loop, to end this server send SIGTERM. (CTRL+C)
   while (1) {
-    lws_service(context, 50);
     // libwebsocket_service will process all waiting events with
     // their callback functions and then wait 50 ms.
     // (this is a single threaded web server and this will keep our
     // server from generating load while there are not
     // requests to process)
+    lws_service(context, 50);
 
     drain_queue();
   }

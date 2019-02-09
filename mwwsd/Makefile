@@ -1,10 +1,10 @@
 
 CC=gcc
 
-CFLAGS=-g `pkgconf --cflags json-c`
+CFLAGS=-g `pkgconf --cflags json-c` `pkgconf --cflags glib-2.0`
 
 
-OBJECTS=mwwsd.o protocol.o
+OBJECTS=mwwsd.o protocol.o sender.o logging.o
 
 
 all: mwwsd
@@ -13,7 +13,7 @@ clean:
 	rm -f *.o simple mwwsd *~
 
 mwwsd: $(OBJECTS)
-	$(CC) -o mwwsd -lwebsockets `pkgconf --libs json-c` -lpthread -LMidWay $(OBJECTS)
+	$(CC) -o mwwsd -lwebsockets `pkgconf --libs json-c` `pkgconf --libs glib-2.0`  -lpthread -LMidWay $(OBJECTS)
 
 simple.o: simple.c
 
@@ -21,3 +21,9 @@ simple.o: simple.c
 mwwsd.o: mwwsd.c mwwsd.h
 
 protocol.o: protocol.c   mwwsd.h
+
+sender.o: sender.c mwwsd.h 
+
+logging.o: logging.c mwwsd.h
+
+

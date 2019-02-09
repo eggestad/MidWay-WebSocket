@@ -1,30 +1,29 @@
 
 
-static inline int
-sptime(char *b, int max)
-{
-  int rc;
-  struct timeval tv;
-  struct tm * now;
-  if (b == NULL) return  -1;
+#include <stdio.h>
+#include <stdlib.h>
+#include <libwebsockets.h>
+#include <MidWay.h>
 
-  gettimeofday(&tv,NULL);
-  now = localtime((time_t *) &tv.tv_sec);
-  
-  rc = snprintf(b, max, "%4d/%2.2d/%2.2d %2.2d:%2.2d:%2.2d.%3.3ld",
-		now->tm_year+1900, now->tm_mon+1, now->tm_mday,
-		now->tm_hour, now->tm_min, now->tm_sec, tv.tv_usec/1000);
-  return rc;
-}
+typedef struct {
+   struct lws *wsi;
+   int32_t clienthandle;
+   int32_t internalhandle;      
+   
+} PendingCall ;
 
-#define debug(...) do { char ts[80]; sptime(ts, 80), fprintf (stderr, "DBG [%s] ", ts); fprintf (stderr, __VA_ARGS__); fprintf (stderr, "\n"); } while(0);
 
-#define info(...) do { char ts[80]; sptime(ts, 80), fprintf (stderr, "INF [%s] ", ts); fprintf (stderr, __VA_ARGS__); fprintf (stderr, "\n"); } while(0);
+#define debug(...) do { lwsl_debug( __VA_ARGS__  ); } while(0);
 
-#define error(...) do { char ts[80]; sptime(ts, 80), fprintf (stderr, "WRN [%s] ", ts); fprintf (stderr, __VA_ARGS__); fprintf (stderr, "\n"); } while(0);
 
-#define error(...) do { char ts[80]; sptime(ts, 80), fprintf (stderr, "ERR [%s] ", ts); fprintf (stderr, __VA_ARGS__); fprintf (stderr, "\n"); } while(0);
+#define info(...) do { lwsl_notice( __VA_ARGS__  ); } while(0);
 
+#define warn(...) do { lwsl_warn( __VA_ARGS__  );} while(0);
+
+#define error(...) do { lwsl_err( __VA_ARGS__  );} while(0);
+
+
+extern struct lws_context *context;
 
 int callback_midway_ws(
 		       struct lws *wsi,
@@ -38,3 +37,7 @@ int callback_midway_ws(
 int queue_message(void);
 
 int drain_queue(void);
+
+void * sender_thread_main(void *);
+
+char * lbl_lws_callback_reasons(int);
