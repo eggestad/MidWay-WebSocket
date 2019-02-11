@@ -9,6 +9,8 @@
 
 void logwrapper(int level, const char *line)  {
 
+   int len = strlen(line) ;
+   if (line[len-1] == '\n') len--;
    
    switch (  level) {
 
@@ -27,11 +29,11 @@ void logwrapper(int level, const char *line)  {
       break;
 
    default:
-      mwlog(MWLOG_WARNING, " %d %s", level, line);
+      mwlog(MWLOG_WARNING, " %d %.*s", level, len, line);
       return;
    }
-
-   mwlog(level, "%.*s", strlen(line) -1, line);
+   
+   mwlog(level, "%.*s", len, line);
    return;
 }
 

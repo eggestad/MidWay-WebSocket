@@ -118,12 +118,12 @@ int main(int argc, char ** argv) {
 
     case 'L':
       strncpy(logprefix, optarg, PATH_MAX);
-      printf("logprefix = \"%s\" at %s:%d\n", logprefix, __FUNCTION__, __LINE__);
+      //printf("logprefix = \"%s\" at %s:%d\n", logprefix, __FUNCTION__, __LINE__);
       break;
 
     case 'A':
       uri = strdup(optarg);
-   printf("attaching %s\n", uri);
+      //printf("attaching %s\n", uri);
      break;
       
     case 'p':
