@@ -7,6 +7,34 @@
 #include <MidWay.h>
 #include "mwwsd.h"
 
+void logwrapper(int level, const char *line)  {
+
+   
+   switch (  level) {
+
+   case LLL_ERR:
+      level = MWLOG_ERROR;
+      break;
+   case LLL_WARN:
+      level = MWLOG_WARNING;
+      break;
+   case LLL_INFO:
+   case LLL_NOTICE:
+      level = MWLOG_INFO;
+      break;
+   case LLL_DEBUG:
+      level = MWLOG_DEBUG;
+      break;
+
+   default:
+      mwlog(MWLOG_WARNING, " %d %s", level, line);
+      return;
+   }
+
+   mwlog(level, "%.*s", strlen(line) -1, line);
+   return;
+}
+
 
 #define CASE(reason) case reason: return #reason;
 

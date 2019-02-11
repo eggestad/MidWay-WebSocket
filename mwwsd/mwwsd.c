@@ -28,7 +28,7 @@ static int callback_http(
   if ( reason == LWS_CALLBACK_GET_THREAD_ID) return 0;
 
    lws_sockfd_type sockfd = lws_get_socket_fd( wsi );
-   debug("https connection fd %d reason %d(%s)\n", sockfd,
+   DEBUG2("https connection fd %d reason %d(%s)", sockfd,
 	 reason, lbl_lws_callback_reasons(reason) );
    
    return 0;
@@ -54,16 +54,73 @@ static struct lws_protocols protocols[] = {
 
 struct lws_context *context;
 
+void usage(char * arg0)
+{
+  printf ("%s: [-A ipcuri] [-l level] [-L logprefix]  [-p WSport] \n",
+	  arg0);
+  printf ("-A ipcuri    : The IPC url to a running MidWay instance\n");
+  printf ("-l level     : log level\n");
+  printf ("-L logprefix : The prefix for the logfile\n");
+  printf ("-p WSport    : The port to listen for WebSocket connections\n");
+  printf ("\nWebSockets server for MidWay.\n\n");
+  printf ("This is needed for the simple javascript client library midway.js\n");
+  printf ("either for browsers or node.js. node.js have a native\n");
+  printf ("interface to the full MidWay API but requires that the full \n");
+  printf ("MidWay is installed that required that the OS is either\n");
+  printf ("Linux or MAX OSX.\n");
+  printf ("\n");
+  printf ("The WebSocket API/Protocol make it easy to implement the MidWay API.\n");
+  printf ("The result is that midway.js become a very small JS library/module.\n");
+  printf ("\n");
+};
 
-int main(void) {
-  // server url will be http://localhost:9000
+int main(int argc, char ** argv) {
+  
   int port = 9000;
   const char *interface = NULL;
+  char c, *name;
+  char logprefix[PATH_MAX] = "mwwsd";
+  char * uri = NULL;
+  int rc;
+  int llloglevel = LLL_ERR| LLL_WARN | LLL_NOTICE | LLL_INFO;
+  int mwloglevel = MWLOG_DEBUG2;
   
-  // we're not using ssl
+  // we're not using ssl (yet)
   const char *cert_path = NULL;
   const char *key_path = NULL;
 
+  name = strrchr(argv[0], '/');
+  if (name == NULL) name = argv[0];
+  else name++;
+
+    /* first of all do command line options */
+  while((c = getopt(argc,argv, "A:l:p:L:")) != EOF ){
+    switch (c) {       
+    case 'l':
+       rc =  _mwstr2loglevel(optarg);
+       if (rc != -1) mwloglevel  = rc;
+       else usage(argv[0]);
+      break;
+
+    case 'L':
+      strncpy(logprefix, optarg, PATH_MAX);
+      printf("logprefix = \"%s\" at %s:%d\n", logprefix, __FUNCTION__, __LINE__);
+      break;
+
+    case 'A':
+      uri = strdup(optarg);
+      break;
+      
+    case 'p':
+      port = atoi(optarg);
+      break;
+
+    default:
+      usage(argv[0]);
+      break;
+    }
+  }
+  
   // no special options
   int opts = 0;
   struct lws_context_creation_info info = {0};
@@ -74,21 +131,25 @@ int main(void) {
   
   
   // create libwebsocket context representing this server
+  llloglevel |= LLL_DEBUG ;
+  mwopenlog(name, "./", mwloglevel);
+  _mw_copy_on_stderr(TRUE);
+  
+  lws_set_log_level(llloglevel,  logwrapper /* lwsl_emit_stderr */);
   context = lws_create_context(&info);
    
   if (context == NULL) {
     fprintf(stderr, "libwebsocket init failed\n");
     return -1;
   }
-  int loglevel = LLL_ERR| LLL_WARN | LLL_NOTICE | LLL_INFO;
-  
-  loglevel |= LLL_DEBUG ;
-  
-  lws_set_log_level(loglevel,  NULL /* lwsl_emit_stderr */);
+ 
+
   
   init_subscription_store();
   init_pendingcall_store();
-     
+
+  mwlog(MWLOG_INFO, "Starting WebSockets Server");
+
   lwsl_notice("starting server...\n");
   pthread_t sender_thread;
 

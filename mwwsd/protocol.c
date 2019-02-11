@@ -385,7 +385,7 @@ static inline void print_header(struct lws *wsi, int token) {
    char buf[8000] = {0};
    int len = lws_hdr_copy(wsi, buf, 7000, token);
    
-   debug ("   %s = %s\n", lws_token_to_string( token), buf);
+   DEBUG2 ("   %s = %s", lws_token_to_string( token), buf);
    //printf ("   %d of %d\n", strlen(buf), len);
 }
 static inline char **  get_query_params_header(struct lws *wsi, int token) {

@@ -1,7 +1,7 @@
 
 CC=gcc
-
-CFLAGS=-g `pkgconf --cflags json-c` `pkgconf --cflags glib-2.0`
+MWSRC=../../MidWay/src
+CFLAGS=-g -I $(MWSRC)/include `pkgconf --cflags json-c` `pkgconf --cflags glib-2.0` 
 
 
 OBJECTS=mwwsd.o protocol.o sender.o logging.o subscriptions.o pendingcalls.o
@@ -13,7 +13,7 @@ clean:
 	rm -f *.o simple mwwsd *~
 
 mwwsd: $(OBJECTS)
-	$(CC) -o mwwsd -lwebsockets `pkgconf --libs json-c` `pkgconf --libs glib-2.0`  -lpthread -LMidWay $(OBJECTS)
+	$(CC) -o mwwsd -lwebsockets `pkgconf --libs json-c` `pkgconf --libs glib-2.0`  -lpthread -lMidWay $(OBJECTS)
 
 simple.o: simple.c
 

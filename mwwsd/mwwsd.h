@@ -26,14 +26,23 @@ typedef struct {
 
 #define debug(...) do { lwsl_debug( __VA_ARGS__  ); } while(0);
 
-
 #define info(...) do { lwsl_notice( __VA_ARGS__  ); } while(0);
 
 #define warn(...) do { lwsl_warn( __VA_ARGS__  );} while(0);
 
 #define error(...) do { lwsl_err( __VA_ARGS__  );} while(0);
 
+/*
+#define Debug(...) do {  mwlog(MWLOG_DEBUG, __VA_ARGS__  ); } while(0);
 
+#define Debug2(...) do {  mwlog(MWLOG_DEBUG2, __VA_ARGS__  ); } while(0);
+
+#define Info(...) do { mwlog(MWLOG_INFO,  __VA_ARGS__  ); } while(0);
+
+#define Warn(...) do { mwlog(MWLOG_WARNING, __VA_ARGS__  );} while(0);
+
+#define Error(...) do { mwlog(MWLOG_ERROR, __VA_ARGS__  );} while(0);
+*/
 extern struct lws_context *context;
 
 int callback_midway_ws(
@@ -44,6 +53,7 @@ int callback_midway_ws(
 		       size_t len
 		       );
 
+void logwrapper(int level, const char *line) ;
 
 // sender.c
 void * sender_thread_main(void *);
