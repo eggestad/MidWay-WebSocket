@@ -11,6 +11,7 @@
 
 // MidWay libs
 #include <MidWay.h>
+#include <ipcmessages.h>
 #include "mwwsd.h"
 
 
@@ -337,11 +338,18 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
    }
    if (data == NULL) data = "";
    debug("call request valid\n");
+
+   int flags = 0;
+   if (handle == 0) flags |= MWNOREPLY;
    
+   int hdl =  _mwacallipc (service,  data, strlen(data), flags, 
+		      UNASSIGNED, NULL, NULL, UNASSIGNED, 1);
+   if (handle == 0) return  0;
+
    PendingCall * pc = malloc(sizeof(PendingCall));
    pc->wsi = wsi;
    pc->clienthandle = handle;
-   pc->internalhandle = getNextHandle();
+   pc->internalhandle = hdl;
    pc->jobj = jobj;
 
    json_object_get(jobj);

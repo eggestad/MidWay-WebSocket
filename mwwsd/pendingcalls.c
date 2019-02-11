@@ -61,7 +61,40 @@ void clearPendingCalls(struct lws * wsi) {
   G_UNLOCK (pendingcalls);
 }
 
+void deliver_svcreply(int32_t handle, char * data, size_t datalen,
+		      int appreturncode, int returncode) {
+   G_LOCK (pendingcalls);
+   debug("delivering call\n");
+   long hdl = handle;
+   gpointer val = g_hash_table_lookup (pendingcalls,  (gpointer) hdl);
+   PendingCall * pc = val;
+   struct json_object * jobj = pc->jobj;
 
+   json_object_object_del(jobj, "command");
+   json_object_object_add (jobj, "command", json_object_new_string ("CALLRPL"));
+   json_object_object_del(jobj, "data");
+   if (data != NULL &&datalen > 0) {
+      json_object_object_add (jobj, "data", json_object_new_string_len (data, datalen));
+   }
+
+   char * rctxt  = "FAIL";
+   if (returncode == MWMORE) rctxt = "MORE";
+   if (returncode == MWSUCCESS) rctxt = "OK";
+      
+   json_object * rcObj;
+   rcObj = json_object_new_string (rctxt);
+   json_object_object_add (jobj, "RC", rcObj);
+   json_object_object_add (jobj, "apprc", json_object_new_int (appreturncode));
+   queueMessage(pc->wsi, jobj);
+   if (returncode != MWMORE) {
+      json_object_put(jobj);
+      free(pc);
+      g_hash_table_remove (pendingcalls,  (gpointer) hdl);
+   }
+      
+   G_UNLOCK (pendingcalls);
+   debug("done one call\n");
+};
 /*
  * Just used for testing 
  */   

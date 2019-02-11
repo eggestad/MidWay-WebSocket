@@ -6,6 +6,11 @@
 
 #include <libwebsockets.h>
 #include <MidWay.h>
+#include <ipctables.h>
+#include <ipcmessages.h>
+#include <mwclientapi.h>
+#include <mwclientipcapi.h>
+#include <address.h>
 
 #include "mwwsd.h"
 
@@ -74,6 +79,14 @@ void usage(char * arg0)
   printf ("\n");
 };
 
+
+int doshutdown = 0;
+
+void onSignal(int sig) {
+   doshutdown = 1;
+}
+   
+
 int main(int argc, char ** argv) {
   
   int port = 9000;
@@ -84,7 +97,8 @@ int main(int argc, char ** argv) {
   int rc;
   int llloglevel = LLL_ERR| LLL_WARN | LLL_NOTICE | LLL_INFO;
   int mwloglevel = MWLOG_DEBUG2;
-  
+  mwaddress_t * mwaddress;
+
   // we're not using ssl (yet)
   const char *cert_path = NULL;
   const char *key_path = NULL;
@@ -109,7 +123,8 @@ int main(int argc, char ** argv) {
 
     case 'A':
       uri = strdup(optarg);
-      break;
+   printf("attaching %s\n", uri);
+     break;
       
     case 'p':
       port = atoi(optarg);
@@ -143,30 +158,45 @@ int main(int argc, char ** argv) {
     return -1;
   }
  
-
-  
+  signal(SIGINT, onSignal);
+  signal(SIGTERM, onSignal);
+  signal(SIGHUP, onSignal);
+  signal(SIGQUIT, onSignal);
+    
   init_subscription_store();
   init_pendingcall_store();
 
   mwlog(MWLOG_INFO, "Starting WebSockets Server");
+ 
+  debug("attaching %s\n", uri);
+  rc = mwattach(uri, "WebSocketServer", MWCLIENT);
+  if (rc != 0) {
+     Error("MidWay instance is not running");
+     exit(rc);
+  };
 
-  lwsl_notice("starting server...\n");
+  debug("subscribing to all events \n");
+
+  _mw_ipcsend_subscribe ("*", 1, MWEVGLOB);
+
   pthread_t sender_thread;
 
   pthread_create(&sender_thread, NULL, sender_thread_main, NULL);
      
   // infinite loop, to end this server send SIGTERM. (CTRL+C)
-  while (1) {
+  while (!doshutdown) {
     // libwebsocket_service will process all waiting events with
     // their callback functions and then wait 50 ms.
     // (this is a single threaded web server and this will keep our
     // server from generating load while there are not
     // requests to process)
     lws_service(context, 50);
-
+    
   }
    
   lws_context_destroy(context);
-   
+  _mw_detach_ipc();
+  Info("Bye!");
+  
   return 0;
 }

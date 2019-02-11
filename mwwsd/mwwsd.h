@@ -66,6 +66,7 @@ int queueMessage(struct lws *wsi,  json_object * jobj ) ;
 void init_pendingcall_store();
 int addPendingCall(PendingCall *) ;
 void clearPendingCalls(struct lws * wsi) ;
+void deliver_svcreply(int32_t handle, char * data, size_t datalen, int appreturncode, int returncode);
 
 // subscriptions.c
 
@@ -75,3 +76,6 @@ void clearSubscriptions(struct lws *) ;
 void processEvent(char *, char *, size_t) ;
 const char * getSubscriptionError() ;
 void init_subscription_store(void) ;
+
+
+// undocumented internal libMidWay functions we'll need.
