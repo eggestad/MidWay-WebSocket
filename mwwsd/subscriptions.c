@@ -101,7 +101,7 @@ int delSubScription(struct lws * wsi, int32_t handle) {
    
    GQueue * q = g_hash_table_lookup (subscriptions, wsi);
    if (q == NULL) {
-      warn("tried to remove a subscription but there is no subscriptions for wsi %p\n", wsi);
+      warn("tried to remove a subscription but there is no subscriptions for wsion fd:%d\n", lws_get_socket_fd(wsi));
       rc = 0;
       goto out;
    }
@@ -129,7 +129,7 @@ void clearSubscriptions(struct lws * wsi) {
 
    GQueue * q = g_hash_table_lookup (subscriptions, wsi);
    if (q == NULL) {
-      debug("tried to clean subscription but there is no subscriptions for wsi %p\n", wsi);
+      debug("tried to clean subscription but there is no subscriptions for wsi on fd:%d\n", lws_get_socket_fd(wsi));
       return;
    }
    
@@ -140,7 +140,8 @@ void clearSubscriptions(struct lws * wsi) {
       free(sub->pattern);
       free(sub);
    };
-   
+
+   g_hash_table_remove(subscriptions, wsi);
    debug("subscriptions now %d\n", g_hash_table_size(subscriptions));
    G_UNLOCK (subscriptions);   
 }
@@ -177,7 +178,7 @@ void processEvent(char * evname, char * evdata, size_t evdatalen) {
       json_object * hdllist = json_object_new_array ();
 
       gpointer wsi = keys[i];
-      debug("going thru  wsi %p\n", wsi);
+      debug("going thru wsi on fd:%d\n", lws_get_socket_fd(wsi));
       gpointer val = 
 	 g_hash_table_lookup (subscriptions,  wsi);
       GQueue * q = val;
@@ -186,7 +187,7 @@ void processEvent(char * evname, char * evdata, size_t evdatalen) {
 	 
 	 subscription_t  * sub = g_queue_peek_nth(q, n);
 	 if (sub == NULL) {
-	    error("Can't happen, an element of a subscription queue for wsi %p was NULL\n", wsi);
+	    error("Can't happen, an element of a subscription queue for wsi on fd:%d was NULL\n", lws_get_socket_fd(wsi));
 	    continue; // can't happen but..
 	 }
 	 if (sub->type == SUBTYPE_GLOB) {

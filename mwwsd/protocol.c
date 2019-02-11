@@ -72,8 +72,8 @@ int queueMessage(struct lws *wsi,  json_object * jobj ) {
    char * msg = strdup(text);
    g_queue_push_head(q, msg);
    lws_callback_on_writable (wsi);
-   debug("enqueued on wsi %p fd %d pending %d msg %s\n",
-	 wsi, lws_get_socket_fd(wsi), g_queue_get_length(q), msg);
+   debug("enqueued on wsi fd:%d pending %d msg %s\n",
+	 lws_get_socket_fd(wsi), g_queue_get_length(q), msg);
    G_UNLOCK (sendqueues);
    return 1;
 }
@@ -343,8 +343,7 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
    pc->clienthandle = handle;
    pc->internalhandle = getNextHandle();
    pc->jobj = jobj;
-   debug("jobj %p\n", jobj);
-   debug("pending call %p\n", pc);
+
    json_object_get(jobj);
    addPendingCall(pc);
    return 0;
@@ -427,13 +426,20 @@ int callback_midway_ws(
 	 reason, lbl_lws_callback_reasons(reason),  len, user);
 
    switch (reason) {
-      // just log message that someone is connecting
 
+      // send on startup, we might do init stuff here later
+   case LWS_CALLBACK_PROTOCOL_INIT:
+      
+      break;
+
+      // just log message that someone is connecting
+      
    case LWS_CALLBACK_ESTABLISHED: 
       debug("connection established %s\n", in);
       inspect_headers_debug(wsi);
       break;
 
+      // when websocket protocol go thru iinitialization
    case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
       {
 	 debug("protocol connection established %s\n", in);
@@ -457,7 +463,7 @@ int callback_midway_ws(
 	 char rip[32];
 	 lws_get_peer_addresses	(wsi, lws_get_socket_fd (wsi),
 				 cname, 255, rip, 31);
-	 info("Got connection from %s(%s) for domain %s clientname %s user %s cred %s\n", cname, rip, domain, rc_clientname, rc_username, rc_credentials);
+	 info("Got connection fd:%d from %s(%s) for domain %s clientname %s user %s cred %s\n", lws_get_socket_fd(wsi), cname, rip, domain, rc_clientname, rc_username, rc_credentials);
 	 
       }
       break;
@@ -509,21 +515,21 @@ int callback_midway_ws(
    
    case LWS_CALLBACK_CLIENT_WRITEABLE:
    case LWS_CALLBACK_SERVER_WRITEABLE:
-      info("got writeable event\n");
+      debug("got writeable event\n");
       doWritable(wsi);
       break;
-      
+
+   case LWS_CALLBACK_WS_PEER_INITIATED_CLOSE :
+      break;
    case LWS_CALLBACK_CLOSED:
       {
-	 
-	 //info("Got connection from %s(%s) for domain %s clientname %s user %s cred %s\n", cname, rip, domain, rc_clientname, rc_username, rc_credentials);
 	 info("Closing connection of fd %d \n", lws_get_socket_fd(wsi));
 	 doClose(wsi);
       }
       break;
       
    default:
-      info("got unepected event\n");
+      info("got unexpected event\n");
       break;
    }
    debug("==== midway connection event done\n");

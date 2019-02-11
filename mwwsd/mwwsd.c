@@ -80,7 +80,11 @@ int main(void) {
     fprintf(stderr, "libwebsocket init failed\n");
     return -1;
   }
-  lws_set_log_level(0xffff,  NULL /* lwsl_emit_stderr */);
+  int loglevel = LLL_ERR| LLL_WARN | LLL_NOTICE | LLL_INFO;
+  
+  loglevel |= LLL_DEBUG ;
+  
+  lws_set_log_level(loglevel,  NULL /* lwsl_emit_stderr */);
   
   init_subscription_store();
   init_pendingcall_store();
