@@ -1,9 +1,15 @@
+
+"use strict";
+
 var WebSocketClient = require('websocket').client;
 var client = new WebSocketClient();
 
 var websocket ;
 var attachInProgress = false;
 
+var errorhandler = function(error, ...args) {
+    console.error(error, args);
+}
    
 /*
  * This do the heavy lifting on attach 
@@ -32,6 +38,10 @@ client.on("connect", function(conn) {
     let m = JSON.stringify(mesg)
     let rc = conn.send(m);
     console.info(" send", m, " rc", rc);
+});
+
+client.on("connectFailed", (errdesc) => {
+    errorhandler("connection failed: ", errdesc);
 });
 
 var handle = 0x1234;
@@ -123,7 +133,6 @@ exports.attach = function (url) {
 }
 
 exports.detach = function () {
-    console.info("det");
     websocket.close();
     websocket = undefined;
 };

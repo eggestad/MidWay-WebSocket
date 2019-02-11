@@ -1,4 +1,5 @@
 
+"use strict";
 
 var mw = require('./midway-node-clientlib');
 
@@ -23,7 +24,7 @@ function function3() {
 
 function function9() {
     mw.unsubscribe(subhdl);
-    mw.acall("testdate", "clientdata\306jjj", (rpl, apprc, rc) => {
+    mw.acall("testdate", "clientdata", (rpl, apprc, rc) => {
 	console.debug("call replied: ", rpl, " with ", apprc, rc);
     });
 
