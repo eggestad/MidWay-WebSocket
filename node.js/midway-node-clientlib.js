@@ -1,9 +1,6 @@
 var WebSocketClient = require('websocket').client;
 var client = new WebSocketClient();
 
-
-console.info("client", client);
-
 var websocket ;
 var attachInProgress = false;
 
@@ -45,10 +42,70 @@ function getHandle() {
 
 /* this is the heavy lifting on all messages from server */
 function onMessage(msg) {
-    console.info("on message", msg);
-    
+    console.debug("on message", msg);
+    if (msg.type == 'utf8')
+	msg  = JSON.parse(msg.utf8Data);
+    console.debug("on message", msg);
+
+    if (msg.RC == "error") {
+	console.error("server rejected a message from us, ", msg.error);
+	return;
+    }
+
+    try {
+	let command = msg.command;
+	console.debug("command", msg.command, command);
+	if (command == "ATTACH") {
+	    if (msg.RC == "OK") {
+		console.info ("connected OK to MidWay server");
+	    } else {
+		console.info ("MidWay server rejected connection,", msg.reason);
+		websocket.close();
+		websocket = undefined;
+	    }
+	    
+	} else if (command == "EVENT") {
+	    let handle = msg.handle;
+	    let event_endpoint = subscriptions[handle];
+	    if (! event_endpoint)
+		console.error("got an unexpected event")
+	    else 
+		event_endpoint.evfunc(msg.event, msg.data);
+	}
+	
+	else if (command == "CALLRPL") {
+	    let handle = msg.handle;
+	    
+	    let call_endpoint = pendingcalls[handle];
+	    if (call_endpoint.errfunc && msg.RC == "FAIL")
+		call_endpoint.errfunc(data, apprc);
+	    else
+		call_endpoint.successfunc(msg.data, msg.apprc, msg.RC);
+	    if (msg.RC == "OK")
+		delete pendingcalls[handle];
+	    
+	}
+	else if (command == "SUBSCRIBERPL") {
+	    if (msg.RC == "OK") {
+	    } else if (msg.RC == "FAIL") {
+		console.error("server rejected subscripion, reason", msg.reason);
+		delete subscriptions[msg.handle];
+	    }
+	    
+	    
+	}
+	else if (command == "UNSUBSCRIBERPL") {
+	    delete subscriptions[msg.handle];
+	    
+	} else {
+	    console.error("received a message with unknown command, ", command);
+	}
+			
+    } catch (e) {
+	console.error("while handling a message from server", e);
+    }
 }
- 
+
 
 var pendingcalls = new Object();
 var subscriptions = new Object();
@@ -72,7 +129,9 @@ exports.detach = function () {
 };
 
 
-exports.acall = function (svcname, data, successfunc, errorfunc, flags = 0) {
+exports.acall = function (svcname, data = undefined,
+			  successfunc = undefined, errorfunc = undefined,
+			  flags = 0) {
     if (! svcname) throw ("required service name argument is undefined");
     
     console.info("mwacall", svcname, data, flags);
@@ -91,14 +150,24 @@ exports.acall = function (svcname, data, successfunc, errorfunc, flags = 0) {
     websocket.send(JSON.stringify(callmesg));
 };
 
-exports.subscribe = function (pattern, evfunc, flags = 0) {
+exports.subscribe = function (pattern, evfunc) {
     if (! pattern) throw ("required pattern argument is undefined");
     if (! evfunc ) throw ("required callback argument is undefined");
-    
-    console.info("mwsubscribe", pattern, flags);
+
+    if (typeof(evfunc) != 'function')
+	throw ("required callback argument is not a function");
+
+    console.info("mwsubscribe", pattern);
     var submesg = {};
     submesg.command = "SUBSCRIBEREQ";
-    submesg.pattern = pattern;
+    if (typeof(pattern) == 'object' && pattern.source) {
+    	submesg.pattern = pattern.source
+	submesg = "regex";
+    } else if (typeof(pattern) == 'string')
+	submesg.pattern = pattern;
+    else
+	throw ("required pattern argument must be either a string of regex");
+    
     submesg.handle = getHandle();
     let sub = { "pattern": pattern, "evfunc": evfunc };
     subscriptions[submesg.handle] = sub;
@@ -125,10 +194,10 @@ exports.unsubscribe = function (pattern_or_handle) {
 	if (! subscriptions.hasOwnProperty(handle))
 	    throw ("have no matching subscriptions")
     }
-    console.info("mwunsubscribe", srcname, data, flags);
+    console.info("mwunsubscribe", pattern_or_handle, handle);
     var submesg = {};
     submesg.command = "UNSUBSCRIBEREQ";
-    submesg.handle = getHandle();
+    submesg.handle = handle;
 
 //    submesg.flags = flags;
     websocket.send(JSON.stringify(submesg));
