@@ -63,11 +63,11 @@ A client send request with
 a call reply from server (mwwsd) to client
 
 {
-  "command": "CALLRPL", // REQUIRED
-  "data":  "..."        // OPTIONAL see above on size
-  "handle": int/str     // REQUIRED must be the same as handle in CALLREQ
+  "command": "CALLRPL",     // REQUIRED
+  "data":  "..."            // OPTIONAL see above on size
+  "handle": int/str         // REQUIRED must be the same as handle in CALLREQ
   "RC": "OK"|"FAIL"|"MORE"  // REQUIRED "MORE" iff "multiple" was set in CALLREQ
-  "apprc": int/str	// a 32 bit int signed, as an int or decimal string
+  "apprc": int/str	    // REQUIRED a 32 bit int signed, as an int or decimal string
 }
 
 

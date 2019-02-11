@@ -184,7 +184,7 @@ int  getNextHandle() {
 /**
  * called on either Subscribe or UnSubscribe messages from client
  */
-static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscribe ) {
+static int doSubscribe(struct lws *wsi, struct json_object *jobj ) {
 
    struct json_object *field;
    int rc;
@@ -194,9 +194,7 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
    int handle = 0;
    
    char * replycmd = "SUBSCRIBERPL";
-   if (unsubscribe) {
-      replycmd  = "UNSUBSCRIBERPL";
-   }
+   
 
    json_object_object_del(jobj, "command");
    json_object_object_add (jobj, "command", json_object_new_string (replycmd));
@@ -253,7 +251,39 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj, int unsubscrib
    queueMessage(wsi, jobj);
    return 0;
 };
+/**
+ * called on either Subscribe or UnSubscribe messages from client
+ */
+static int doUnSubscribe(struct lws *wsi, struct json_object *jobj ) {
 
+   struct json_object *field;
+   char * replycmd ="UNSUBSCRIBERPL";  
+   int handle = 0;
+
+   json_object_object_del(jobj, "command");
+   json_object_object_add (jobj, "command", json_object_new_string (replycmd));
+   if (json_object_object_get_ex(jobj, "handle", &field)) {
+      
+      if ( json_object_is_type(field, json_type_int)) {
+	 handle  = json_object_get_int (field);
+	 debug("int handle = %d\n", handle);
+      } else if ( json_object_is_type(field, json_type_string)) {
+	 const char * s  = json_object_get_string (field);
+	 debug("str handle = %s\n", s);
+	 handle = atoi(s);
+	 debug("int handle = %d\n", handle);
+      } else {
+	 setError(jobj, "handle is not a string or long");
+	 queueMessage(wsi, jobj);	 
+	 return -1;
+      }      
+   }
+   delSubScription(wsi, handle);
+   
+   json_object_object_add (jobj, "RC", json_object_new_string ("OK"));
+   return 0;
+}
+ 
 /**
  * called on a call request from client 
  **/
@@ -464,10 +494,10 @@ int callback_midway_ws(
 	    doCallReq(wsi, jobj);
 
 	 else if (strcmp("SUBSCRIBEREQ", command) == 0)
-	    doSubscribe(wsi, jobj, FALSE);
+	    doSubscribe(wsi, jobj);
 
 	 else if (strcmp("UNSUBSCRIBEREQ", command) == 0)
-	    doSubscribe(wsi, jobj, TRUE);
+	    doUnSubscribe(wsi, jobj);
 
 	 else
 	    doError(wsi, jobj, "Unknown command");
