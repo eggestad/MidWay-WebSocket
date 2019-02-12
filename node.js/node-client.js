@@ -1,9 +1,9 @@
 
 "use strict";
 
-var mw = require('./midway-node-clientlib');
+var midway = require('./midway-node-clientlib').MidWay;;
 
-mw.attach("url")
+var mw = new midway('ws://localhost:9000/domain');
 
 function ev1(evname, evdata) {
     console.info("EV:", evname, evdata);
@@ -33,7 +33,7 @@ function function9() {
 setTimeout(function3, 500);
 
 
-setTimeout(function9, 3000);
+//setTimeout(function9, 10000);
 
 
 process.stdin.setEncoding('utf8');
@@ -42,7 +42,7 @@ process.stdin.on('readable', () => {
   const chunk = process.stdin.read();
   if (chunk !== null) {
 
-      mw.acall("testdate", chunk, function(rply, apprc, rc) {
+      mw.acall("testtime", chunk, function(rply, apprc, rc) {
 	  console.debug("call replied: ", rply, " with ", apprc, rc);
       }, function(err) {
 	  console.debug("call replied error", err);
