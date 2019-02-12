@@ -19,6 +19,7 @@ function function2() {
 var subhdl ;
 function function3() {
     subhdl = mw.subscribe("1*", ev1);
+    subhdl = mw.subscribe("1*", ev1);
 }
 
 

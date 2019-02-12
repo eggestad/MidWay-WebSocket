@@ -156,12 +156,18 @@ var mw = (function(scope) {
 		    }
 		    
 		} else if (command == "EVENT") {
-		    let handle = msg.handle;
-		    let event_endpoint = this.midway.subscriptions[handle];
-		    if (! event_endpoint)
-			onerrorhandler("got an unexpected event")
-		    else 
-			event_endpoint.evfunc(msg.event, msg.data);
+		    debug(this.midway.subscriptions);
+		    let handles = msg.handle;
+		    for (let i = 0; i < handles.length; i++) {
+			handle = handles[i] ;
+			debug(handle) ;
+			
+			let event_endpoint = this.midway.subscriptions[handle];
+			if (! event_endpoint)
+			    onerrorhandler("got an unexpected event")
+			else 
+			    event_endpoint.evfunc(msg.event, msg.data);
+		    }
 		}
 		
 		else if (command == "CALLRPL") {
@@ -193,6 +199,7 @@ var mw = (function(scope) {
 		}
 		
 	    } catch (e) {
+		debug("excpt", e);
 		onerrorhandler("while handling a message from server" + e);
 	    }
 	}
