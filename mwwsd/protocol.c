@@ -23,6 +23,21 @@ G_LOCK_DEFINE (sendqueues );
 
 GHashTable * sendqueues = NULL;
 
+#define TEXTMSG 0xf
+#define BLOBMSG 0xf0
+typedef union {
+   struct   {
+      int type;
+      char * text;
+   } text;
+   struct   {
+      int type;
+      char * blob;
+      size_t len;
+   } blob ;
+} mesgQueueElem_t;
+
+      
 
 static int _send_response(struct lws *wsi, const char * text) {
 
@@ -54,27 +69,78 @@ static int _send_response(struct lws *wsi, const char * text) {
    free(buf);
 }
 
+
+static int _send_blob_response(struct lws *wsi, const char * blob, size_t len) {
+   debug("sending blob response len %d\n", len);
+
+   // Create a buffer to hold our response
+   // it has to have some pre and post padding.
+   // You don't need to care what comes there, libwebsockets
+   // will do everything for you. For more info see
+   // http://git.warmcat.com/cgi-bin/cgit/libwebsockets/tree/lib/libwebsockets.h#n597
+   unsigned char *buf = (unsigned char*)
+      malloc(LWS_SEND_BUFFER_PRE_PADDING + len
+	     + LWS_SEND_BUFFER_POST_PADDING);
+
+   memcpy(&buf[LWS_SEND_BUFFER_PRE_PADDING], blob, len);
+   // send response
+   // just notice that we have to tell where exactly our response
+   // starts. That's why there's buf[LWS_SEND_BUFFER_PRE_PADDING]
+   // and how long it is. We know that our response has the same
+   // length as request because it's the same message 
+   // in reverse order.
+   lws_write(wsi, &buf[LWS_SEND_BUFFER_PRE_PADDING],
+	     len, LWS_WRITE_BINARY);
+           
+   // release memory back into the wild
+   free(buf);
+}
+
 /**
  * add to an internal send queue per wsi the message 
  * described by jobj. 
  * this function serialized jobj before queueing, jobj may be destroyed
  */
-int queueMessage(struct lws *wsi,  json_object * jobj ) {
+int queueMessage(struct lws *wsi,  json_object * jobj, void * data, size_t len ) {
    G_LOCK (sendqueues);
    if (sendqueues == NULL)
       sendqueues = g_hash_table_new (g_direct_hash, g_direct_equal);
+
+   json_object * jobj_len;
+   json_bool havebindata = json_object_object_get_ex(jobj, "bindata", &jobj_len);
+   if (data != NULL && !havebindata) {
+      jobj_len = json_object_new_int64(len) ;  
+      json_object_object_add (jobj, "bindata", jobj_len);
+   }
    
    GQueue * q = g_hash_table_lookup (sendqueues, wsi);
    if (q == NULL) {
       q = g_queue_new ();
       g_hash_table_insert (sendqueues, wsi, q);
    }
-   const char * text = json_object_to_json_string(jobj);
-   char * msg = strdup(text);
-   g_queue_push_head(q, msg);
+   mesgQueueElem_t * textmsg = malloc (sizeof(mesgQueueElem_t));
+   textmsg->text.type = TEXTMSG;
+   textmsg->text.text = strdup(json_object_to_json_string(jobj));
+   g_queue_push_head(q, textmsg);
    lws_callback_on_writable (wsi);
-   debug("enqueued on wsi fd:%d pending %d msg %s\n",
-	 lws_get_socket_fd(wsi), g_queue_get_length(q), msg);
+
+   debug("enqueued %p %d", textmsg, textmsg->text.type);
+   
+   debug("enqueued text on wsi fd:%d pending %d msg %s\n",
+	 lws_get_socket_fd(wsi), g_queue_get_length(q), textmsg->text.text);
+
+   if (data != NULL) {
+      mesgQueueElem_t * blobmsg = malloc (sizeof(mesgQueueElem_t));
+      blobmsg->blob.type = BLOBMSG;
+      blobmsg->blob.blob = malloc(len);
+      memcpy(blobmsg->blob.blob, data, len);
+      blobmsg->blob.len = len;
+      g_queue_push_head(q, blobmsg);
+      debug("enqueued blob on wsi fd:%d pending %d len %d\n",
+	    lws_get_socket_fd(wsi), g_queue_get_length(q), blobmsg->blob.len);
+	 
+   }
+	 
    G_UNLOCK (sendqueues);
    return 1;
 }
@@ -90,14 +156,27 @@ static int doWritable(struct lws *wsi) {
       warn("Got spurious WRITEABLE");
       return 0;
    }
-   gpointer msg = g_queue_pop_tail(q);
+   gpointer gp = g_queue_pop_tail(q);
+   mesgQueueElem_t * msg = gp;
    if (msg == NULL) {
       warn("Got spurious WRITEABLE");
       return 0;
    }
-   
-   int rc = _send_response(wsi, msg);
-   free(msg);
+   debug("dequeued %p", msg);
+   int rc = 0;
+   if (msg->text.type == TEXTMSG) {
+      rc = _send_response(wsi, msg->text.text);
+      free(msg->text.text);
+      free(msg);
+   } else if (msg->blob.type == BLOBMSG) {
+      rc += _send_blob_response(wsi, msg->blob.blob, msg->blob.len);
+      free(msg->blob.blob);
+      free(msg);
+   } else {
+      Error("dequeued unknown message from send queue, %p %d",
+	    msg, msg->text.type);
+      // Can't happen
+   }
    guint restlen = g_queue_get_length (q);
    if (restlen  > 0) 
       lws_callback_on_writable (wsi);
@@ -122,7 +201,7 @@ static int doError(struct lws *wsi, struct json_object *jobj, const char * reaso
    json_object_object_add (jobj, "RC", json_object_new_string ("error"));
    json_object_object_add (jobj, "error", json_object_new_string (reason));
 
-   queueMessage(wsi, jobj);   
+   queueMessage(wsi, jobj, NULL, 0);   
 };
 
 /**
@@ -138,7 +217,7 @@ static int doAttach(struct lws *wsi, struct json_object *jobj ) {
       
       if (! json_object_is_type(field, json_type_string)) {
 	 setError(jobj, "domain is not a string");
-	 queueMessage(wsi, jobj);
+	 queueMessage(wsi, jobj, NULL, 0);
 	 return -1;
       }
       const char * domain = json_object_get_string (field);
@@ -146,7 +225,7 @@ static int doAttach(struct lws *wsi, struct json_object *jobj ) {
    };
    
    json_object_object_add (jobj, "RC", json_object_new_string ("OK"));
-   queueMessage(wsi, jobj);
+   queueMessage(wsi, jobj, NULL, 0);
    return 0;
 };
 
@@ -204,14 +283,14 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj ) {
       
       if (! json_object_is_type(field, json_type_string)) {
 	 setError(jobj, "pattern is not a string");
-	 queueMessage(wsi, jobj);	 
+	 queueMessage(wsi, jobj, NULL, 0);	 
 	 return -1;
       }
       pattern = json_object_get_string (field);
       debug("subscribing to pattern %s\n",  pattern);
    } else {
       setError(jobj, "pattern is missing");
-      queueMessage(wsi, jobj);	 
+      queueMessage(wsi, jobj, NULL, 0);	 
       return -1;
    }
    
@@ -227,7 +306,7 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj ) {
 	 debug("int handle = %d\n", handle);
       } else {
 	 setError(jobj, "handle is not a string or long");
-	 queueMessage(wsi, jobj);	 
+	 queueMessage(wsi, jobj, NULL, 0);	 
 	 return -1;
       }      
    }
@@ -249,7 +328,7 @@ static int doSubscribe(struct lws *wsi, struct json_object *jobj ) {
       setError(jobj, getSubscriptionError());
    }
 
-   queueMessage(wsi, jobj);
+   queueMessage(wsi, jobj, NULL, 0);
    return 0;
 };
 /**
@@ -275,7 +354,7 @@ static int doUnSubscribe(struct lws *wsi, struct json_object *jobj ) {
 	 debug("int handle = %d\n", handle);
       } else {
 	 setError(jobj, "handle is not a string or long");
-	 queueMessage(wsi, jobj);	 
+	 queueMessage(wsi, jobj, NULL, 0);	 
 	 return -1;
       }      
    }
@@ -296,12 +375,14 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
    const char * service  = NULL;;
    const char * data = NULL;
    long handle = 0;
+   size_t bindata = 0;
+
    
    if (json_object_object_get_ex(jobj, "service", &field)) {
       
       if (! json_object_is_type(field, json_type_string)) {
 	 setError(jobj, "service is not a string");
-	 queueMessage(wsi, jobj);	 
+	 queueMessage(wsi, jobj, NULL, 0);	 
 	 return -1;
       }
       service = json_object_get_string (field);
@@ -309,7 +390,7 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
       
    } else {
       setError(jobj, "servicename missing");
-      queueMessage(wsi, jobj);	 
+      queueMessage(wsi, jobj, NULL, 0);	 
       return -1;
    }
 
@@ -317,10 +398,24 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
       
       if (! json_object_is_type(field, json_type_string)) {
 	 setError(jobj, "data is not a string");
-	 queueMessage(wsi, jobj);	 
+	 queueMessage(wsi, jobj, NULL, 0);	 
 	 return -1;
       }
       data = json_object_get_string (field);
+   }
+   
+   if (json_object_object_get_ex(jobj, "bindata", &field)) {
+      
+      if ( json_object_is_type(field, json_type_int)) {
+	 bindata  = json_object_get_int (field);
+      } else if ( json_object_is_type(field, json_type_string)) {
+	 const char * s  = json_object_get_string (field);
+	 bindata = atol(s);
+      } else {
+	 setError(jobj, "bindata is not a string or long");
+	 queueMessage(wsi, jobj, NULL, 0);	 
+	 return -1;
+      }      
    }
 
    if (json_object_object_get_ex(jobj, "handle", &field)) {
@@ -332,7 +427,7 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
 	 handle = atoi(s);
       } else {
 	 setError(jobj, "handle is not a string or long");
-	 queueMessage(wsi, jobj);	 
+	 queueMessage(wsi, jobj, NULL, 0);	 
 	 return -1;
       }      
    }
@@ -340,20 +435,35 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
    debug("call request valid\n");
 
    int flags = 0;
-   if (handle == 0) flags |= MWNOREPLY;
-   
-   int hdl =  _mwacallipc (service,  data, strlen(data), flags, 
-		      UNASSIGNED, NULL, NULL, UNASSIGNED, 1);
-   if (handle == 0) return  0;
+   if (handle == 0) {
+      flags |= MWNOREPLY;
+      
+      _mwacallipc (service,  data, strlen(data), flags, 
+		   UNASSIGNED, NULL, NULL, UNASSIGNED, 1);
+      return  0;
+   }
 
+   /* we have to place the mwacallipc unside the lock at we don't
+      have the handle yet. It happens that the kernel
+      do a context switch on the underlying msgsnd(), in which case
+      we're likely to get the reply on the other thread before we
+      continue here*/
+   pendingcalls_lock();
+
+   int hdl =  _mwacallipc (service,  data, strlen(data), flags, 
+			   UNASSIGNED, NULL, NULL, UNASSIGNED, 1);
    PendingCall * pc = malloc(sizeof(PendingCall));
+   debug("pc @ %p\n", pc);
    pc->wsi = wsi;
    pc->clienthandle = handle;
    pc->internalhandle = hdl;
    pc->jobj = jobj;
-
+   pc->bindata = bindata;
+   
    json_object_get(jobj);
    addPendingCall(pc);
+   pendingcalls_unlock();
+
    return 0;
 };
 

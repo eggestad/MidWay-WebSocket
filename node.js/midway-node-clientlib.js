@@ -39,6 +39,7 @@ var mw = (function(scope) {
 	    let websocket = this.websocket;
 	    
 	    websocket.onopen = (event) => {
+		debug("op open event", event);
 		let mesg = {};
 		mesg.command = "ATTACH"
 		let m = JSON.stringify(mesg)
@@ -46,14 +47,14 @@ var mw = (function(scope) {
 		debug(" send", m, " rc", rc);
 		if ( typeof(onready) === 'function') onready();
 	    };
-	    websocket.onerror = (event) => {
+	    websocket.onerror = (error) => {
 		console.info("on error", error);
 		onerrorhandler(error);
 	    };
 	    websocket.onmessage = onMessage;
 	    websocket.onclose = (event) => {
-		debug("on close", reasonCode, desc);
-		onclosehandler(reasonCode, desc)
+		debug("on close", event, undefined);
+		onclosehandler(event, undefined)
 		websocket = undefined;
 	    };
 	} else {
@@ -111,7 +112,7 @@ var mw = (function(scope) {
 
 	this.pendingcalls = new Object();
 	this.subscriptions = new Object();
-
+	this.nextMessageData = undefined;
 	// constants
 	this.GLOB = 10;
 	this.REGEXP = 11;	
@@ -122,15 +123,46 @@ var mw = (function(scope) {
 	/* this is the heavy lifting on all messages from server */
 	function onMessage(msg) {
 	    debug("on message", msg);
+	    if (msg["data"])
+		debug("on message data type", msg.data.constructor.name);
+	    // if node.js
+	    if (this.nextMessageData) {
+		if (  msg["type"] == 'binary')  {
+		    msg.data = msg.binaryData;
+		} else if (  msg.data instanceof Blob)  {
+		    // we're OK
+		} else {
+		    onerrorhandler("expected binary data Blob , but got " +  msg.data.constructor.name);
+		    this.nextMessageData = undefined;
+		}
+		let lastmsg = this.nextMessageData;
+		let handle = lastmsg.handle;
+		
+		let call_endpoint = this.midway.pendingcalls[handle];
+		if (call_endpoint.errfunc && msg.RC == "FAIL")
+		    call_endpoint.errfunc(data, apprc);
+		else
+		    call_endpoint.successfunc(msg.data, lastmsg.apprc, lastmsg.RC);
+		if (lastmsg.RC != "MORE")
+		    delete this.midway.pendingcalls[handle];
+
+		this.nextMessageData = undefined;
+		return;
+	    }
+
 	    // if node.js
 	    if (msg.hasOwnProperty('type') && msg.type == 'utf8') {
 		msg  = JSON.parse(msg.utf8Data);
 		// if browser
 	    } else if ( typeof(msg.data) !== 'undefined' ){
 		msg  = JSON.parse(msg.data);
+	    } else if ( msg.data instanceof Blob){	    
+		onerrorhandler("Got an unexpected Blob WebSocket message");
+		return;		
 	    } else {
-		debug("on message", msg.data);
-		onerrorhandler("can't find data in websockt message");
+		debug("on message", msg);
+		onerrorhandler("can't make sense of websocket message");
+		return;
 	    }
 	    debug("on message", msg);
 	    //console.debug("on message this ", this);
@@ -172,13 +204,18 @@ var mw = (function(scope) {
 		
 		else if (command == "CALLRPL") {
 		    let handle = msg.handle;
+		    if (msg["bindata"] ) {
+			debug("awaiting bindata");
+			this.nextMessageData = msg;
+			return;
+		    }
 		    
 		    let call_endpoint = this.midway.pendingcalls[handle];
 		    if (call_endpoint.errfunc && msg.RC == "FAIL")
 			call_endpoint.errfunc(data, apprc);
 		    else
 			call_endpoint.successfunc(msg.data, msg.apprc, msg.RC);
-		    if (msg.RC == "OK")
+		    if (msg.RC != "MORE")
 			delete this.midway.pendingcalls[handle];
 		    
 		}

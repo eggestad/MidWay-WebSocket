@@ -26,15 +26,26 @@ void init_pendingcall_store() {
 
 }
 
+void pendingcalls_lock(){
+   G_LOCK (pendingcalls);
+}
+void pendingcalls_unlock(){
+   G_UNLOCK (pendingcalls);
+}
+
 
 int addPendingCall(PendingCall * pc) {
-   G_LOCK (pendingcalls);
+   // we expect the lock to be already held when we get here.
+   // see doCallReq in protocols.c. We have to have the locks
+   // brefore _mwacallipc()
+   
+   //G_LOCK (pendingcalls);
    long hdl = pc->internalhandle;
-   debug("pending call with handle %ld\n", hdl);
+   debug("add pending call with handle %ld %p\n", hdl, pc);
    gpointer inthandle = (gpointer) hdl;
    gboolean rc = g_hash_table_insert(pendingcalls, inthandle, pc);
-   debug("pending calls now %d\n", g_hash_table_size(pendingcalls));
-   G_UNLOCK (pendingcalls);
+   debug("add pending calls now %d\n", g_hash_table_size(pendingcalls));
+   //G_UNLOCK (pendingcalls);
    return rc ;
 }
 
@@ -57,26 +68,35 @@ void clearPendingCalls(struct lws * wsi) {
 	 g_hash_table_remove (pendingcalls,  key);
       }
    }
-    debug("pending calls now %d\n", g_hash_table_size(pendingcalls));
-  G_UNLOCK (pendingcalls);
+   g_free(keys);
+   debug("pending calls now %d\n", g_hash_table_size(pendingcalls));
+   G_UNLOCK (pendingcalls);
 }
 
 void deliver_svcreply(int32_t handle, char * data, size_t datalen,
 		      int appreturncode, int returncode) {
    G_LOCK (pendingcalls);
-   debug("delivering call\n");
+   debug("delivering call internal handle = %d\n", handle);
    long hdl = handle;
    gpointer val = g_hash_table_lookup (pendingcalls,  (gpointer) hdl);
+   if (val == 0) {
+      error(" tried to deliver an unexpected service reply");
+      goto out;
+   }
+
    PendingCall * pc = val;
+   debug("delivering pc %p\n", pc);
    struct json_object * jobj = pc->jobj;
 
    json_object_object_del(jobj, "command");
    json_object_object_add (jobj, "command", json_object_new_string ("CALLRPL"));
    json_object_object_del(jobj, "data");
+
+#if STRDATA
    if (data != NULL &&datalen > 0) {
       json_object_object_add (jobj, "data", json_object_new_string_len (data, datalen));
    }
-
+#endif 
    char * rctxt  = "FAIL";
    if (returncode == MWMORE) rctxt = "MORE";
    if (returncode == MWSUCCESS) rctxt = "OK";
@@ -85,13 +105,14 @@ void deliver_svcreply(int32_t handle, char * data, size_t datalen,
    rcObj = json_object_new_string (rctxt);
    json_object_object_add (jobj, "RC", rcObj);
    json_object_object_add (jobj, "apprc", json_object_new_int (appreturncode));
-   queueMessage(pc->wsi, jobj);
+   queueMessage(pc->wsi, jobj, data, datalen);
    if (returncode != MWMORE) {
       json_object_put(jobj);
       free(pc);
       g_hash_table_remove (pendingcalls,  (gpointer) hdl);
    }
-      
+
+ out:
    G_UNLOCK (pendingcalls);
    debug("done one call\n");
 };
@@ -128,7 +149,7 @@ void testReplies() {
       json_object_object_add (jobj, "RC", rcObj);
       json_object_object_add (jobj, "apprc", json_object_new_int (apprc));
 
-      queueMessage(pc->wsi, jobj);
+      queueMessage(pc->wsi, jobj, NULL, 0);
       json_object_put(jobj);
       free(pc);
       g_hash_table_remove (pendingcalls,  key);

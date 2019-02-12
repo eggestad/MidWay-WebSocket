@@ -16,7 +16,7 @@ typedef struct {
    int32_t clienthandle;
    int32_t internalhandle;      
    struct json_object *jobj;
-   
+   size_t bindata;
 } PendingCall ;
 
 #define SUBTYPE_GLOB 10
@@ -60,10 +60,13 @@ void * sender_thread_main(void *);
 
 // protocol.c
 char * lbl_lws_callback_reasons(int);
-int queueMessage(struct lws *wsi,  json_object * jobj ) ;
+int queueMessage(struct lws *wsi,  json_object * jobj, void * data, size_t len);
 
 // pendingcalls.c
 void init_pendingcall_store();
+void pendingcalls_lock();
+void pendingcalls_unlock();
+
 int addPendingCall(PendingCall *) ;
 void clearPendingCalls(struct lws * wsi) ;
 void deliver_svcreply(int32_t handle, char * data, size_t datalen, int appreturncode, int returncode);
