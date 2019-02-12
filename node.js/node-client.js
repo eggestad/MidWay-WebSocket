@@ -1,7 +1,7 @@
 
 "use strict";
 
-var midway = require('./midway-node-clientlib').MidWay;;
+var midway = require('./midway').MidWay;;
 
 var mw = new midway('ws://localhost:9000/domain');
 
