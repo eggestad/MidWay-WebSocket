@@ -5,11 +5,11 @@ Server side
 
 The WebSocker Server  is easy enough to use. 
 
-./mwwsd: [-A ipcuri] [-l level] [-L logprefix]  [-p WSport] 
--A ipcuri    : The IPC url to a running MidWay instance
--l level     : log level
--L logprefix : The prefix for the logfile
--p WSport    : The port to listen for WebSocket connections
+`./mwwsd: [-A ipcuri] [-l level] [-L logprefix]  [-p WSport] `
+`-A ipcuri    : The IPC url to a running MidWay instance`
+`-l level     : log level`
+`-L logprefix : The prefix for the logfile`
+`-p WS-port    : The port to listen for WebSocket connections default 9000`
 
 
 if you're running mwd without address parameter, you do the same with mwwsd.
@@ -35,7 +35,7 @@ then all you need to do is:
 
 Once midway.js is loaded then run
 
-`var mw = new MidWay(url, [[[onconnect], onerror], onclose]);`
+`var mw = new MidWay(url, [onconnect], [[onerror], [[onclose]]]);`
 url is required and is on the form 'ws://127.0.0.1:9000'
 
 Callbacks are not necessary, but if you try to do either subscribe or acall
