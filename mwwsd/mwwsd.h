@@ -62,6 +62,7 @@ void logwrapper(int level, const char *line) ;
 
 // sender.c
 void * sender_thread_main(void *);
+int  doMidWayIPCMessage(int);
 
 // protocol.c
 char * lbl_lws_callback_reasons(int);

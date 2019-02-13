@@ -97,13 +97,18 @@ int main(int argc, char ** argv) {
   char * uri = NULL;
   int rc;
   int llloglevel = LLL_ERR| LLL_WARN | LLL_NOTICE | LLL_INFO;
-  int mwloglevel = MWLOG_DEBUG2;
+  int mwloglevel = MWLOG_DEBUG;
   mwaddress_t * mwaddress;
 
   // default config
   config.alwaysBinaryData = FALSE;
   config.useThreads = TRUE;
-  
+  //config.useThreads = FALSE;
+
+  if (getenv("MWNOTHREADS")  != NULL) config.useThreads  = FALSE;
+  if (getenv("MWBINDATA")  != NULL) config.alwaysBinaryData  = TRUE;
+
+ 
   // we're not using ssl (yet)
   const char *cert_path = NULL;
   const char *key_path = NULL;
@@ -154,6 +159,7 @@ int main(int argc, char ** argv) {
   llloglevel |= LLL_DEBUG ;
   mwopenlog(name, "./", mwloglevel);
   _mw_copy_on_stderr(TRUE);
+
   
   lws_set_log_level(llloglevel,  logwrapper /* lwsl_emit_stderr */);
   context = lws_create_context(&info);
@@ -172,7 +178,11 @@ int main(int argc, char ** argv) {
   init_pendingcall_store();
 
   mwlog(MWLOG_INFO, "Starting WebSockets Server");
- 
+  debug ("MWNOTHREADS=%s useThreads=%d",
+	 getenv("MWNOTHREADS"), config.useThreads);
+  debug ("MWBINDATA=%s alwaysBinaryData=%d",
+	 getenv("MWBINDATA"), config.alwaysBinaryData);
+
   debug("attaching %s\n", uri);
   rc = mwattach(uri, "WebSocketServer", MWCLIENT);
   if (rc != 0) {
@@ -196,9 +206,8 @@ int main(int argc, char ** argv) {
     // server from generating load while there are not
     // requests to process)
     lws_service(context, 50);
-
     if (!config.useThreads) {
-       int rc = doMidWayIPCMessage(0);
+       int rc = doMidWayIPCMessage(1);
        if (rc < 0) {
 	  doshutdown = 1;
        }

@@ -73,7 +73,7 @@ int doMidWayIPCMessage(int noblock) {
 
   if (noblock) flags |= MWNOBLOCK;
 
-  debug("doing getipc message");
+  DEBUG2("doing getipc message");
   rc = _mw_ipc_getmessage(message, &len, 0, flags);
 
   if (rc == -EIDRM) {
