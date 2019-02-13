@@ -136,42 +136,35 @@ var mw = (function(scope) {
 		    this.nextMessageData = undefined;
 		}
 		let lastmsg = this.nextMessageData;
-		let handle = lastmsg.handle;
-		
-		let call_endpoint = this.midway.pendingcalls[handle];
-		if (call_endpoint.errfunc && msg.RC == "FAIL")
-		    call_endpoint.errfunc(data, apprc);
-		else
-		    call_endpoint.successfunc(msg.data, lastmsg.apprc, lastmsg.RC);
-		if (lastmsg.RC != "MORE")
-		    delete this.midway.pendingcalls[handle];
-
+		lastmsg.data = msg.data;
+		msg = lastmsg;
 		this.nextMessageData = undefined;
-		return;
-	    }
+		delete(msg.bindata);
+	    } else { // normal MidWay message 
 
-	    // if node.js
-	    if (msg.hasOwnProperty('type') && msg.type == 'utf8') {
-		msg  = JSON.parse(msg.utf8Data);
-		// if browser
-	    } else if ( typeof(msg.data) !== 'undefined' ){
-		msg  = JSON.parse(msg.data);
-	    } else if ( msg.data instanceof Blob){	    
-		onerrorhandler("Got an unexpected Blob WebSocket message");
-		return;		
-	    } else {
+		// if node.js
+		if (msg.hasOwnProperty('type') && msg.type == 'utf8') {
+		    msg  = JSON.parse(msg.utf8Data);
+		    // if browser
+		} else if ( typeof(msg.data) !== 'undefined' ){
+		    msg  = JSON.parse(msg.data);
+		} else if ( msg.data instanceof Blob){	    
+		    onerrorhandler("Got an unexpected Blob WebSocket message");
+		    return;		
+		} else {
+		    debug("on message", msg);
+		    onerrorhandler("can't make sense of websocket message");
+		    return;
+		}
 		debug("on message", msg);
-		onerrorhandler("can't make sense of websocket message");
-		return;
-	    }
-	    debug("on message", msg);
-	    //console.debug("on message this ", this);
-	    //console.debug("on message this.client ", this.client);
-	    //console.debug("on message this.midway ", this.midway);
+		//console.debug("on message this ", this);
+		//console.debug("on message this.client ", this.client);
+		//console.debug("on message this.midway ", this.midway);
 
-	    if (msg.RC == "error") {
-		onerrorhandler("server rejected a message from us: " + msg.error);
-		return;
+		if (msg.RC == "error") {
+		    onerrorhandler("server rejected a message from us: " + msg.error);
+		    return;
+		}
 	    }
 
 	    try {
@@ -189,6 +182,11 @@ var mw = (function(scope) {
 		    
 		} else if (command == "EVENT") {
 		    debug(this.midway.subscriptions);
+		    if (msg["bindata"] ) {
+			debug("awaiting bindata");
+			this.nextMessageData = msg;
+			return;
+		    }
 		    let handles = msg.handle;
 		    for (let i = 0; i < handles.length; i++) {
 			handle = handles[i] ;
