@@ -74,7 +74,7 @@ int addSubScription(struct lws * wsi, int32_t handle, const char * pattern, int 
       errno = EINVAL;
       return -errno;
    };
-
+   debug("LOCKING SUB");
    G_LOCK (subscriptions);
 
    GQueue * q = g_hash_table_lookup (subscriptions, wsi);
@@ -86,6 +86,7 @@ int addSubScription(struct lws * wsi, int32_t handle, const char * pattern, int 
 
    debug("wsi with subscriptions now %d\n", g_hash_table_size(subscriptions));
    debug("subscriptions with this wsi now %d\n", g_queue_get_length(q));
+   debug("UNLOCKING SUB");
    G_UNLOCK (subscriptions);
    return 0 ;
 }
@@ -93,6 +94,7 @@ int addSubScription(struct lws * wsi, int32_t handle, const char * pattern, int 
 static void removeSub(gpointer elm, gpointer queuep);
 
 int delSubScription(struct lws * wsi, int32_t handle) {
+   debug("UNLOCKING SUB");
    G_LOCK (subscriptions);
    int rc = 0;
    
@@ -118,6 +120,7 @@ int delSubScription(struct lws * wsi, int32_t handle) {
  out: 
    debug("wsi with subscriptions now %d\n", g_hash_table_size(subscriptions));
    debug("subscriptions with this wsi now %d\n", g_queue_get_length(q));
+   debug("UNLOCKING SUB");
    G_UNLOCK (subscriptions);
    return rc ;
 }
@@ -133,6 +136,7 @@ void clearSubscriptions(struct lws * wsi) {
       return;
    }
    
+   debug("LOCKING SUB");
    G_LOCK (subscriptions);
    subscription_t * sub;
    while (sub = g_queue_pop_head (q) ){
@@ -144,6 +148,7 @@ void clearSubscriptions(struct lws * wsi) {
    g_hash_table_remove(subscriptions, wsi);
    g_queue_free (q);
    debug("subscriptions now %d\n", g_hash_table_size(subscriptions));
+   debug("UNLOCKING SUB");
    G_UNLOCK (subscriptions);   
 }
 
@@ -156,6 +161,7 @@ void testEvents() {
 
 void processEvent(char * evname, char * evdata, size_t evdatalen) {
 
+   debug("LOCKING SUB");
    G_LOCK (subscriptions);
    struct json_object * jobj = json_object_new_object();
    json_object_object_add (jobj, "command", json_object_new_string ("EVENT"));
@@ -163,13 +169,20 @@ void processEvent(char * evname, char * evdata, size_t evdatalen) {
 
    debug ("got event %s with data %10s...\n", evname, evdata);
 
-#ifdef STRDATA
    if (evdata != NULL) {
       if (evdatalen <= 0) evdatalen = strlen(evdata);
-       json_object_object_add (jobj, "data",
-			       json_object_new_string_len (evdata, evdatalen));
+      gboolean valid_utf8 = FALSE;
+      if (!config.alwaysBinaryData)
+	 valid_utf8 = g_utf8_validate(evdata, evdatalen, NULL);
+      
+      if (valid_utf8) {
+	 debug("data is valid UTF8");
+	 json_object_object_add (jobj, "data",
+				 json_object_new_string_len (evdata, evdatalen));
+	 evdata = NULL;
+	 evdatalen = 0;
+      }
    }
-#endif
    guint length;
    gpointer * keys = 
       g_hash_table_get_keys_as_array (subscriptions, &length);
@@ -216,5 +229,8 @@ void processEvent(char * evname, char * evdata, size_t evdatalen) {
       }
    }
    debug("done processing event\n");
+   json_object_put(jobj);
+   
+   debug("UNLOCKING SUB");
    G_UNLOCK (subscriptions);
 };

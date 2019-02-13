@@ -56,6 +56,7 @@ static struct lws_protocols protocols[] = {
   }
 };
 
+struct config_t config = { 0 };
 
 struct lws_context *context;
 
@@ -99,6 +100,10 @@ int main(int argc, char ** argv) {
   int mwloglevel = MWLOG_DEBUG2;
   mwaddress_t * mwaddress;
 
+  // default config
+  config.alwaysBinaryData = FALSE;
+  config.useThreads = TRUE;
+  
   // we're not using ssl (yet)
   const char *cert_path = NULL;
   const char *key_path = NULL;
@@ -180,8 +185,8 @@ int main(int argc, char ** argv) {
   _mw_ipcsend_subscribe ("*", 1, MWEVGLOB);
 
   pthread_t sender_thread;
-
-  pthread_create(&sender_thread, NULL, sender_thread_main, NULL);
+  if (config.useThreads)
+     pthread_create(&sender_thread, NULL, sender_thread_main, NULL);
      
   // infinite loop, to end this server send SIGTERM. (CTRL+C)
   while (!doshutdown) {
@@ -191,7 +196,14 @@ int main(int argc, char ** argv) {
     // server from generating load while there are not
     // requests to process)
     lws_service(context, 50);
-    
+
+    if (!config.useThreads) {
+       int rc = doMidWayIPCMessage(0);
+       if (rc < 0) {
+	  doshutdown = 1;
+       }
+    }
+       
   }
    
   lws_context_destroy(context);

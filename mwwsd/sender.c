@@ -34,7 +34,7 @@ void do_svcreply(Call * cmsg, int len){
 }
 
 void do_event_message(Event * evmsg, int len) {
-   debug("got IPC event %s dataoff %d daatalen %zu\n",
+   debug("got IPC event %s dataoff %d datalen %zu\n",
 	 evmsg->event, evmsg->data, evmsg->datalen);
    
    char * data = NULL; 
@@ -166,15 +166,15 @@ void * sender_thread_main(void * arg) {
       }
    }
    
-   while(1) {
+   /* while(1) { */
 
-      debug("sender thread sleep\n");
-      sleep(10);
-      debug("sender thread wake\n");
-      testReplies();
-      testEvents();
-      //      lws_cancel_service(context) ;
-   }
+   /*    debug("sender thread sleep\n"); */
+   /*    sleep(10); */
+   /*    debug("sender thread wake\n"); */
+   /*    testReplies(); */
+   /*    testEvents(); */
+   /*    //      lws_cancel_service(context) ; */
+   /* } */
 
    return NULL;
 }

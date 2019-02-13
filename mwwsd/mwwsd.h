@@ -23,6 +23,11 @@ typedef struct {
 #define SUBTYPE_REGEX 11
 
 
+struct config_t {
+   int alwaysBinaryData;
+   int useThreads;
+};
+extern struct config_t config;
 
 #define debug(...) do { lwsl_debug( __VA_ARGS__  ); } while(0);
 

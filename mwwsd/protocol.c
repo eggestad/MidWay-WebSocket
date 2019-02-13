@@ -102,6 +102,7 @@ static int _send_blob_response(struct lws *wsi, const char * blob, size_t len) {
  * this function serialized jobj before queueing, jobj may be destroyed
  */
 int queueMessage(struct lws *wsi,  json_object * jobj, void * data, size_t len ) {
+   debug("LOCKING SUB");
    G_LOCK (sendqueues);
    if (sendqueues == NULL)
       sendqueues = g_hash_table_new (g_direct_hash, g_direct_equal);
@@ -141,6 +142,7 @@ int queueMessage(struct lws *wsi,  json_object * jobj, void * data, size_t len )
 	 
    }
 	 
+   debug("UNLOCKING QS");
    G_UNLOCK (sendqueues);
    return 1;
 }
@@ -150,6 +152,7 @@ int queueMessage(struct lws *wsi,  json_object * jobj, void * data, size_t len )
  * dequeue a message from te sendqueue and send it on the wsi
  */
 static int doWritable(struct lws *wsi) {
+   debug("LOCKING QS");
    G_LOCK (sendqueues);
    GQueue * q = g_hash_table_lookup (sendqueues, wsi);
    if (q == NULL) {
@@ -160,7 +163,7 @@ static int doWritable(struct lws *wsi) {
    mesgQueueElem_t * msg = gp;
    if (msg == NULL) {
       warn("Got spurious WRITEABLE");
-      return 0;
+      goto out;
    }
    debug("dequeued %p", msg);
    int rc = 0;
@@ -180,6 +183,8 @@ static int doWritable(struct lws *wsi) {
    guint restlen = g_queue_get_length (q);
    if (restlen  > 0) 
       lws_callback_on_writable (wsi);
+ out:
+   debug("UNLOCKING QS");
    G_UNLOCK (sendqueues);
    return rc;
 }
@@ -235,6 +240,7 @@ static int doAttach(struct lws *wsi, struct json_object *jobj ) {
 static int doClose(struct lws *wsi) {
 
    // remove all pending messages waiting to be sent
+   debug("LOCKING QS");
    G_LOCK (sendqueues);
    GQueue * q = g_hash_table_lookup (sendqueues, wsi);
    if (q != NULL) {
@@ -242,6 +248,7 @@ static int doClose(struct lws *wsi) {
       g_queue_free_full (q, free);
       g_hash_table_remove (sendqueues, wsi);
    }
+   debug("UNLOCKING QS");
    G_UNLOCK (sendqueues);
 
    // TODO: clear all subscriptions

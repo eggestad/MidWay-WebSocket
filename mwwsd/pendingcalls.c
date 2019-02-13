@@ -27,9 +27,11 @@ void init_pendingcall_store() {
 }
 
 void pendingcalls_lock(){
+   debug("LOCKING PC");
    G_LOCK (pendingcalls);
 }
 void pendingcalls_unlock(){
+   debug("UNLOCKING PC");
    G_UNLOCK (pendingcalls);
 }
 
@@ -50,6 +52,7 @@ int addPendingCall(PendingCall * pc) {
 }
 
 void clearPendingCalls(struct lws * wsi) {
+   debug("LOCKING PC");
    G_LOCK (pendingcalls);
    guint length;
    debug("pending calls before clearing %d\n", g_hash_table_size(pendingcalls));
@@ -70,11 +73,13 @@ void clearPendingCalls(struct lws * wsi) {
    }
    g_free(keys);
    debug("pending calls now %d\n", g_hash_table_size(pendingcalls));
+   debug("UNLOCKING PC");
    G_UNLOCK (pendingcalls);
 }
 
 void deliver_svcreply(int32_t handle, char * data, size_t datalen,
 		      int appreturncode, int returncode) {
+   debug("LOCKING PC");
    G_LOCK (pendingcalls);
    debug("delivering call internal handle = %d\n", handle);
    long hdl = handle;
@@ -92,11 +97,6 @@ void deliver_svcreply(int32_t handle, char * data, size_t datalen,
    json_object_object_add (jobj, "command", json_object_new_string ("CALLRPL"));
    json_object_object_del(jobj, "data");
 
-#if STRDATA
-   if (data != NULL &&datalen > 0) {
-      json_object_object_add (jobj, "data", json_object_new_string_len (data, datalen));
-   }
-#endif 
    char * rctxt  = "FAIL";
    if (returncode == MWMORE) rctxt = "MORE";
    if (returncode == MWSUCCESS) rctxt = "OK";
@@ -105,7 +105,22 @@ void deliver_svcreply(int32_t handle, char * data, size_t datalen,
    rcObj = json_object_new_string (rctxt);
    json_object_object_add (jobj, "RC", rcObj);
    json_object_object_add (jobj, "apprc", json_object_new_int (appreturncode));
-   queueMessage(pc->wsi, jobj, data, datalen);
+
+
+   if (data != NULL && datalen > 0) {
+      gboolean valid_utf8 = FALSE;
+      if (!config.alwaysBinaryData)
+	 valid_utf8 = g_utf8_validate(data, datalen, NULL);
+
+      if (valid_utf8) {
+	 debug("data is valid UTF8");
+	 json_object_object_add (jobj, "data", json_object_new_string_len (data, datalen));
+	 queueMessage(pc->wsi, jobj, NULL, 0);
+      } else {
+	 queueMessage(pc->wsi, jobj, data, datalen);
+      }
+   }
+
    if (returncode != MWMORE) {
       json_object_put(jobj);
       free(pc);
@@ -113,6 +128,7 @@ void deliver_svcreply(int32_t handle, char * data, size_t datalen,
    }
 
  out:
+   debug("UNLOCKING PC");
    G_UNLOCK (pendingcalls);
    debug("done one call\n");
 };
@@ -120,6 +136,7 @@ void deliver_svcreply(int32_t handle, char * data, size_t datalen,
  * Just used for testing 
  */   
 void testReplies() {
+   debug("LOCKING PC");
    G_LOCK (pendingcalls);
    guint length;
    debug("pending calls before  %d\n", g_hash_table_size(pendingcalls));
@@ -156,6 +173,7 @@ void testReplies() {
       debug("done one call\n");
    };
    debug("pending calls after replies %d\n", g_hash_table_size(pendingcalls));
+   debug("UNLOCKING PC");
    G_UNLOCK (pendingcalls);
    return ;
 }
