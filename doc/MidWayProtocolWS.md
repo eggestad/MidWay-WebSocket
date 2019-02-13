@@ -21,10 +21,10 @@ This will/may not be the case for CALL's
 
 If the server fail to parse or find required fields in a message a general
 error message is returned
-`{
-  "RC": "error",        // REQUIRED
-  "error": "..."        // REQUIRED a text describing the cause
-}`
+`{`  
+`  "RC": "error",`        // _REQUIRED_  
+`  "error": "..."`        // _REQUIRED_ a text describing the cause  
+`}`  
 
 
 ## Attach:
@@ -34,9 +34,9 @@ Client name, username, usercredentials are passed as query
 params in the initial HTTP call.
 
 The client shall still send a message
-`{
-  "command": "ATTACH",  // REQUIRED
-  "domain": "..." ,     // OPTIONAL
+`{`  
+`  "command": "ATTACH",`  **// REQUIRED`  
+`  "domain": "..." ,`     **// OPTIONAL`  
 }`
 
 since it's a way to return the cause of a failure
