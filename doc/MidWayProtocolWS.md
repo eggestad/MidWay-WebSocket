@@ -98,10 +98,10 @@ Server will reply with
 
 
 ## EVENT
-Sent from Server only for event matching a SUBSCRIBE, shall not be replied to
+Sent from Server only for event matching a SUBSCRIBE, shall not be replied to  
 `{`  
-`  "command": "EVENT"	 ` // _REQUIRED_  
-`  "event":  str	 ` // _REQUIRED_	  
-`  "handle": [ int|str ] ` // _REQUIRED_	a list of the sub handle that matches  
-`  "data": str		 ` // _OPTIONAL_  
+`  "command": "EVENT"     //` _REQUIRED_  
+`  "event":  str          //` _REQUIRED_	  
+`  "handle": [ int|str ]  //` _REQUIRED_  a list of the sub handle that matches  
+`  "data": str            //` _OPTIONAL_  
 `}`  
