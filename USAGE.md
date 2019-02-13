@@ -5,11 +5,11 @@ Server side
 
 The WebSocker Server  is easy enough to use. 
 
-`./mwwsd: [-A ipcuri] [-l level] [-L logprefix]  [-p WSport] `
-`-A ipcuri    : The IPC url to a running MidWay instance`
-`-l level     : log level`
-`-L logprefix : The prefix for the logfile`
-`-p WS-port    : The port to listen for WebSocket connections default 9000`
+`./mwwsd: [-A ipcuri] [-l level] [-L logprefix]  [-p WSport] `  
+`-A ipcuri    : The IPC url to a running MidWay instance`  
+`-l level     : log level`  
+`-L logprefix : The prefix for the logfile`  
+`-p WS-port    : The port to listen for WebSocket connections default 9000`  
 
 
 if you're running mwd without address parameter, you do the same with mwwsd.
