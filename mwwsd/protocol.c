@@ -474,37 +474,6 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
    return 0;
 };
 
-struct json_object * xxmakeCallReply(json_object * jobj, int32_t clienthandle, char * data, size_t datalen, int rc, int apprc) {
-   if (jobj == NULL)
-      jobj = json_object_new_object ();
-
-   json_object_object_del(jobj, "command");
-   json_object_object_del(jobj, "data");
-   json_object_object_add (jobj, "handle", json_object_new_int (clienthandle));
-
-   json_object_object_add (jobj, "command", json_object_new_string ("CALLRPL"));
-   if (data != NULL) {
-      if (datalen <= 0)
-	 datalen = strlen(data);
-      json_object_object_add (jobj, "data", json_object_new_string_len (data, datalen));
-   }
-   json_object * rcObj;
-   if (rc == MWSUCCESS)
-      rcObj = json_object_new_string ("OK");
-   else if (rc == MWMORE)
-      rcObj = json_object_new_string ("MORE");
-   else if (rc == MWFAIL)
-      rcObj = json_object_new_string ("FAIL");
-   else {
-      rcObj = json_object_new_string ("MORE");
-      warn("we got a call reply with illegal RC %d\n", rc);
-   }
-   json_object_object_add (jobj, "RC", rcObj);
-   json_object_object_add (jobj, "apprc", json_object_new_int (apprc));
-
-   return jobj;
-}
-
 static inline void print_header(struct lws *wsi, int token) {
 
    char buf[8000] = {0};

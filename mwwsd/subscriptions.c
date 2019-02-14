@@ -152,12 +152,6 @@ void clearSubscriptions(struct lws * wsi) {
    G_UNLOCK (subscriptions);   
 }
 
-void testEvents() {
-
-   processEvent("12345", "numbers", 0);
-   processEvent("12abc", "alnum", 0);
-   processEvent("abcde", "alpha", 0);
-}
 
 void processEvent(char * evname, char * evdata, size_t evdatalen) {
 
