@@ -570,7 +570,10 @@ int callback_midway_ws(
       // http://stackoverflow.com/questions/5189071/print-part-of-char-array
       debug("received data: %s\n", (char *) in, (int) len);
 
-
+      char *s = (char * ) in;
+      debug("received data: %d %d %d %d \n", s[0], s[1],s[2],s[3]);
+      int type =  lws_frame_is_binary(wsi);
+      debug("received data of type bin %d\n", type);
       
       struct json_object *jobj  = json_tokener_parse_verbose	 (in, &jerr);
 

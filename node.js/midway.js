@@ -249,14 +249,33 @@ var mw = (function(scope) {
 	this.acall = function (svcname, data = undefined,
 				  successfunc = undefined, errorfunc = undefined,
 				  flags = 0) {
+	    let bindata = undefined;
+
 	    if (! svcname) throw ("required service name argument is undefined");
-	    
 	    debug("mwacall", svcname, data, flags);
+
 	    let callmesg = {};
 	    callmesg.command = "CALLREQ";
 	    callmesg.service = svcname;
-	    if (data) 
-		callmesg.data = data;
+	    if (data) {
+		console.debug("data is of type", data.__proto__.constructor.name);
+		if (data instanceof Blob) {
+		    debug("data blob", data, data.size);
+		    bindata = data;
+		    callmesg.bindata = data.size;
+		} else if (data instanceof ArrayBuffer) {
+		    debug("data arraybuffer", data, data.size);
+		    bindata = data;
+		    callmesg.bindata = data.size;
+		} else if (data instanceof  String || typeof data === "string" ) {
+		    callmesg.data = data;
+		} else if (typeof data === "string" ) {
+		    console.debug("JSON of unknown data type")
+		    callmesg.data = JSON.stringify(data);
+		} else {		    
+		    callmesg.data = data.toString();
+		}
+	    }
 
 	    if (successfunc) {
 		callmesg.handle = getHandle();
@@ -264,7 +283,13 @@ var mw = (function(scope) {
 		this.pendingcalls[callmesg.handle] = pc;
 	    }
 	    //    callmesg.flags = flags;
-	    this.websocket.send(JSON.stringify(callmesg));
+	    callmesg = JSON.stringify(callmesg);
+	    debug("sending callmsg", callmesg);
+	    this.websocket.send(callmesg);
+	    if (bindata) {
+		debug("sending bindata");
+		this.websocket.send(bindata);
+	    }
 	};
 
 	this.subscribe = function (pattern, evfunc) {
