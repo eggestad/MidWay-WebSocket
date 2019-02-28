@@ -459,19 +459,32 @@ static int doCallReq(struct lws *wsi, struct json_object *jobj ) {
 
    int hdl =  _mwacallipc (service,  data, strlen(data), flags, 
 			   UNASSIGNED, NULL, NULL, UNASSIGNED, 1);
-   PendingCall * pc = malloc(sizeof(PendingCall));
-   debug("pc @ %p\n", pc);
-   pc->wsi = wsi;
-   pc->clienthandle = handle;
-   pc->internalhandle = hdl;
-   pc->jobj = jobj;
-   pc->bindata = bindata;
+   if (hdl < 0) {
+      Info("service call failed with %s", strerror(-hdl));
+      json_object_object_del(jobj, "command");
+      json_object_object_add (jobj, "command", json_object_new_string ("CALLRPL"));
+      json_object_object_del(jobj, "data");
+      setError(jobj, "called failed");
+      queueMessage(wsi, jobj, NULL, 0);
+      rc = -1;
+      
+   } else {
+      PendingCall * pc = malloc(sizeof(PendingCall));
+      debug("pc @ %p\n", pc);
+      pc->wsi = wsi;
+      pc->clienthandle = handle;
+      pc->internalhandle = hdl;
+      pc->jobj = jobj;
+      pc->bindata = bindata;
    
-   json_object_get(jobj);
-   addPendingCall(pc);
+      json_object_get(jobj);
+      addPendingCall(pc);
+      rc = 0;
+   }
+   
    pendingcalls_unlock();
 
-   return 0;
+   return rc;
 };
 
 static inline void print_header(struct lws *wsi, int token) {
